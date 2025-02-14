@@ -1,0 +1,29 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  .container {
+    max-width: 600px;
+    margin: 2em auto;
+    padding: 1em;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+  }
+  label {
+    margin-top: 1em;
+  }
+  input, button {
+    padding: 0.5em;
+    margin-top: 0.5em;
+  }
+  button {
+    cursor: pointer;
+  }
+  body.dark {
+    background-color: #121212;
+    color: #e0e0e0;
+  }
+  

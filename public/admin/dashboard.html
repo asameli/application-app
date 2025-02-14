@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Admin Dashboard</h1>
+    <p>Total Applications: <span id="appCount">0</span></p>
+    <table border="1" id="applicationsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Submitted At</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Applications will be dynamically inserted here -->
+      </tbody>
+    </table>
+    <h2>Email Templates</h2>
+    <form id="templatesForm">
+      <label for="thankYou">Thank You Template:</label>
+      <textarea name="thankYou" id="thankYou" rows="4"></textarea>
+
+      <label for="accepted">Accepted Template:</label>
+      <textarea name="accepted" id="accepted" rows="4"></textarea>
+
+      <label for="rejected">Rejected Template:</label>
+      <textarea name="rejected" id="rejected" rows="4"></textarea>
+
+      <button type="submit">Update Templates</button>
+    </form>
+    <a href="/admin/logout">Logout</a>
+  </div>
+  <script>
+    // Fetch and display applications
+    function fetchApplications() {
+      fetch('/admin/api/applications')
+        .then(response => response.json())
+        .then(data => {
+          const tableBody = document.querySelector('#applicationsTable tbody');
+          tableBody.innerHTML = '';
+          data.forEach(app => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${app.id}</td>
+              <td>${app.firstname} ${app.lastname}</td>
+              <td>${app.email}</td>
+              <td>${app.status}</td>
+              <td>${app.created_at}</td>
+              <td>
+                <button onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
+                <button onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
+              </td>
+            `;
+            tableBody.appendChild(row);
+          });
+        });
+    }
+
+    // Fetch application count
+    function fetchCount() {
+      fetch('/admin/api/count')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('appCount').innerText = data.count;
+        });
+    }
+
+    // Fetch email templates
+    function fetchTemplates() {
+      fetch('/admin/api/templates')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
+        });
+    }
+
+    // Update application status (and send an email)
+    function updateStatus(id, status) {
+      fetch('/admin/api/application/' + id + '/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status })
+      })
+      .then(response => response.json())
+      .then(data => {
+        alert(data.message);
+        fetchApplications();
+        fetchCount();
+      });
+    }
+
+    // Handle email templates update
+    document.getElementById('templatesForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const templates = {
+        thankYou: document.getElementById('thankYou').value,
+        accepted: document.getElementById('accepted').value,
+        rejected: document.getElementById('rejected').value
+      };
+      fetch('/admin/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(templates)
+      })
+      .then(response => response.json())
+      .then(data => alert(data.message));
+    });
+
+    // Initial fetches
+    fetchApplications();
+    fetchCount();
+    fetchTemplates();
+  </script>
+</body>
+</html>
