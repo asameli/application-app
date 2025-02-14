@@ -1,4 +1,5 @@
 // server.js
+
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
@@ -11,6 +12,10 @@ const { exec } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Default admin credentials
+const DEFAULT_ADMIN_USERNAME = 'admin';
+const DEFAULT_ADMIN_PASSWORD = 'adminpass';
+
 // Parse URL-encoded and JSON bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -22,7 +27,7 @@ app.use(session({
   saveUninitialized: false,
 }));
 
-// Serve static files from the public directory
+// Serve static files (including index.html) from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Configure Multer for file uploads
@@ -70,47 +75,123 @@ function sendMail(to, subject, message) {
   });
 }
 
-// Endpoint: Submit application
-app.post('/apply', upload.array('documents', 10), (req, res) => {
+//-------------------------------------------------------------
+// ROUTES
+//-------------------------------------------------------------
+
+// GET / => Serve the main page (index.html)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// POST / => Handle form submission
+app.post('/', upload.array('documents', 10), (req, res) => {
   const { firstname, lastname, email } = req.body;
   const id = uuid.v4();
   const documentPaths = req.files.map(file => file.path);
   const documentsJSON = JSON.stringify(documentPaths);
 
-  db.run(`INSERT INTO applications (id, firstname, lastname, email, documents) VALUES (?, ?, ?, ?, ?)`,
+  db.run(
+    `INSERT INTO applications (id, firstname, lastname, email, documents) VALUES (?, ?, ?, ?, ?)`,
     [id, firstname, lastname, email, documentsJSON],
     function(err) {
       if (err) {
         console.error(err);
         return res.status(500).send("Database error.");
       }
-      const emailText = emailTemplates.thankYou.replace('{{firstname}}', firstname).replace('{{id}}', id);
+      // Send automated thank you email
+      const emailText = emailTemplates.thankYou
+        .replace('{{firstname}}', firstname)
+        .replace('{{id}}', id);
       sendMail(email, 'Application Received', emailText);
+
       res.send("Application submitted successfully. Your reference ID is: " + id);
     }
   );
 });
 
+// Admin login endpoint
+app.post('/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  // Use the default admin credentials
+  if (username === DEFAULT_ADMIN_USERNAME && password === DEFAULT_ADMIN_PASSWORD) {
+    req.session.admin = username;
+    return res.redirect('/admin/dashboard.html');
+  }
+  res.redirect('/admin/login.html?error=Invalid credentials');
+});
+
+// Admin logout endpoint
+app.get('/admin/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/admin/login.html');
+});
+
+// Middleware to protect admin routes
+function adminAuth(req, res, next) {
+  if (req.session && req.session.admin) {
+    return next();
+  }
+  return res.redirect('/admin/login.html');
+}
+
+// API: Retrieve all applications for the admin dashboard
+app.get('/admin/api/applications', adminAuth, (req, res) => {
+  db.all("SELECT * FROM applications", [], (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json(rows);
+  });
+});
+
 // API: Update application status (accepted or rejected) and send corresponding email
-app.post('/admin/api/application/:id/status', (req, res) => {
+app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
   if (!['accepted', 'rejected'].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
   db.get("SELECT * FROM applications WHERE id = ?", [id], (err, row) => {
-    if (err || !row) return res.status(500).json({ error: "Application not found" });
+    if (err || !row) {
+      console.error(err);
+      return res.status(500).json({ error: "Application not found" });
+    }
     db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err) {
       if (err) {
         console.error(err);
         return res.status(500).json({ error: "Database error" });
       }
+      // Send acceptance or rejection email using the updated template
       let template = status === 'accepted' ? emailTemplates.accepted : emailTemplates.rejected;
       let emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
     });
   });
+});
+
+// API: Get the total count of applications
+app.get('/admin/api/count', adminAuth, (req, res) => {
+  db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json(row);
+  });
+});
+
+// API: Get and update email templates
+app.get('/admin/api/templates', adminAuth, (req, res) => {
+  res.json(emailTemplates);
+});
+
+app.post('/admin/api/templates', adminAuth, (req, res) => {
+  emailTemplates = req.body;
+  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
+  res.json({ message: "Templates updated" });
 });
 
 // Start the server

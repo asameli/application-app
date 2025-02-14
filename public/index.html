@@ -1,3 +1,4 @@
+<!-- Updated version to include fancy styling and direct link to admin panel -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,9 +8,9 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Apply for an Apartment</h1>
-    <form id="applicationForm" action="/apply" method="POST" enctype="multipart/form-data">
+  <div class="container fancy-card">
+    <h1 class="fancy-title">Apply for an Apartment</h1>
+    <form id="applicationForm" action="/" method="POST" enctype="multipart/form-data">
       <label for="firstname">First Name:</label>
       <input type="text" name="firstname" required>
 
@@ -26,6 +27,7 @@
     </form>
     <div id="response"></div>
     <button id="toggleDarkMode">Toggle Dark Mode</button>
+    <p class="admin-link"><a href="/admin/login.html">Go to Admin Panel</a></p>
   </div>
   <script src="main.js"></script>
 </body>

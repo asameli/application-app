@@ -2,28 +2,68 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
+    background-color: #f9f9f9;
+    color: #333;
   }
+  
   .container {
     max-width: 600px;
     margin: 2em auto;
     padding: 1em;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
+  
+  .fancy-card {
+    transition: background-color 0.5s, color 0.5s;
+  }
+  
+  .fancy-title {
+    font-size: 1.8rem;
+    margin-bottom: 0.5em;
+    text-align: center;
+  }
+  
   form {
     display: flex;
     flex-direction: column;
   }
+  
   label {
     margin-top: 1em;
   }
+  
   input, button {
     padding: 0.5em;
     margin-top: 0.5em;
+    border-radius: 4px;
+    border: 1px solid #ccc;
   }
+  
   button {
     cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
   }
+  
+  button:hover {
+    background-color: #45a049;
+  }
+  
+  .admin-link {
+    margin-top: 1em;
+    text-align: right;
+  }
+  
+  /* Dark mode toggle */
   body.dark {
     background-color: #121212;
     color: #e0e0e0;
   }
   
+  .dark .container {
+    background-color: #1e1e1e;
+    color: #fff;
+  }

@@ -1,0 +1,5 @@
+{
+    "thankYou": "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
+    "accepted": "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.",
+    "rejected": "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected."
+  }

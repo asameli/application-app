@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Admin Login</h1>
+  <div class="container fancy-card">
+    <h1 class="fancy-title">Admin Login</h1>
     <form action="/admin/login" method="POST">
       <label for="username">Username:</label>
       <input type="text" name="username" required>
@@ -19,7 +19,7 @@
       <button type="submit">Login</button>
     </form>
     <div id="error">
-      <!-- Display errors if any -->
+      <!-- Display errors if any, e.g. ?error=Invalid credentials -->
     </div>
   </div>
 </body>
