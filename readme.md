@@ -45,7 +45,7 @@ A Node.js/Express application for managing apartment applications. This system p
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/your-repo.git
+git clone https://github.com/asameli/application-app.git
 cd your-repo
 ```
 
@@ -131,7 +131,7 @@ Plesk offers a Git extension to streamline deployments:
 2. **Add Your Repository:**
    - Click **Add Repository**.
    - Choose **Remote Git hosting**.
-   - Enter your GitHub repository URL (e.g., `https://github.com/yourusername/your-repo.git`).
+   - Enter your GitHub repository URL (e.g., `https://github.com/asameli/application-app.git`).
    - Select the branch to deploy (e.g., `main`).
 
 3. **Enable Automatic Deployment:**
