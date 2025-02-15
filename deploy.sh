@@ -16,3 +16,5 @@ CREATE TABLE IF NOT EXISTS applications (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 EOF
+
+echo "Deployment complete. Database and uploads directory are set up."

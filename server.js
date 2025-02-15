@@ -136,8 +136,9 @@ function adminAuth(req, res, next) {
 }
 
 // API: Retrieve all applications for the admin dashboard
+// Show newest first
 app.get('/admin/api/applications', adminAuth, (req, res) => {
-  db.all("SELECT * FROM applications", [], (err, rows) => {
+  db.all("SELECT * FROM applications ORDER BY created_at DESC", [], (err, rows) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: "Database error" });
@@ -172,6 +173,21 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   });
 });
 
+// API: Delete application
+app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
+  const id = req.params.id;
+  db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+    res.json({ message: "Application deleted successfully" });
+  });
+});
+
 // API: Get the total count of applications
 app.get('/admin/api/count', adminAuth, (req, res) => {
   db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
@@ -198,12 +214,3 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-// TEST - DELETE
-app.get('/testWrite', (req, res) => {
-    fs.writeFile('uploads/test.txt', 'Hello', (err) => {
-      if (err) return res.status(500).send('Write failed: ' + err.message);
-      return res.send('Write succeeded!');
-    });
-  });
-  

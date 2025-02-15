@@ -4,13 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
 </head>
-<body>
-  <div class="container fancy-card">
+<body class="admin-body">
+  <header class="header-bar">
+    <div class="logo">surwave</div>
     <h1 class="fancy-title">Admin Dashboard</h1>
-    <p>Total Applications: <span id="appCount">0</span></p>
-    <table border="1" id="applicationsTable">
+  </header>
+  <div class="container fancy-card">
+    <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
+    <table class="apps-table" id="applicationsTable">
       <thead>
         <tr>
           <th>ID</th>
@@ -25,7 +31,9 @@
         <!-- Applications will be dynamically inserted here -->
       </tbody>
     </table>
-    <h2>Email Templates</h2>
+    <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
+
+    <h2 class="section-title">Email Templates</h2>
     <form id="templatesForm">
       <label for="thankYou">Thank You Template:</label>
       <textarea name="thankYou" id="thankYou" rows="4"></textarea>
@@ -38,7 +46,7 @@
 
       <button type="submit">Update Templates</button>
     </form>
-    <a href="/admin/logout">Logout</a>
+    <a class="logout-link" href="/admin/logout">Logout</a>
   </div>
   <script>
     // Fetch and display applications
@@ -47,22 +55,29 @@
         .then(response => response.json())
         .then(data => {
           const tableBody = document.querySelector('#applicationsTable tbody');
+          const emptyMessage = document.getElementById('emptyMessage');
           tableBody.innerHTML = '';
-          data.forEach(app => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-              <td>${app.id}</td>
-              <td>${app.firstname} ${app.lastname}</td>
-              <td>${app.email}</td>
-              <td>${app.status}</td>
-              <td>${app.created_at}</td>
-              <td>
-                <button onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
-                <button onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
-              </td>
-            `;
-            tableBody.appendChild(row);
-          });
+          if (data.length === 0) {
+            emptyMessage.style.display = 'block';
+          } else {
+            emptyMessage.style.display = 'none';
+            data.forEach(app => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${app.id}</td>
+                <td>${app.firstname} ${app.lastname}</td>
+                <td>${app.email}</td>
+                <td>${app.status}</td>
+                <td>${app.created_at}</td>
+                <td class="actions-cell">
+                  <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
+                  <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
+                  <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
+                </td>
+              `;
+              tableBody.appendChild(row);
+            });
+          }
         });
     }
 
@@ -88,7 +103,7 @@
 
     // Update application status
     function updateStatus(id, status) {
-      fetch('/admin/api/application/' + id + '/status', {
+      fetch(`/admin/api/application/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -96,6 +111,26 @@
       .then(response => response.json())
       .then(data => {
         alert(data.message);
+        fetchApplications();
+        fetchCount();
+      });
+    }
+
+    // Delete application
+    function deleteApplication(id) {
+      if (!confirm('Are you sure you want to delete this application?')) {
+        return;
+      }
+      fetch(`/admin/api/application/${id}`, {
+        method: 'DELETE'
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+        } else {
+          alert(data.message);
+        }
         fetchApplications();
         fetchCount();
       });

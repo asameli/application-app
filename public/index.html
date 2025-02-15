@@ -1,15 +1,21 @@
-<!-- Updated version to include fancy styling and direct link to admin panel -->
+<!-- Updated version with a simple surwave logo and modern styling -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apartment Application</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container fancy-card">
+  <header class="header-bar">
+    <div class="logo">surwave</div>
     <h1 class="fancy-title">Apply for an Apartment</h1>
+  </header>
+  <div class="container fancy-card">
     <form id="applicationForm" action="/" method="POST" enctype="multipart/form-data">
       <label for="firstname">First Name:</label>
       <input type="text" name="firstname" required>
@@ -25,7 +31,7 @@
 
       <button type="submit">Submit Application</button>
     </form>
-    <div id="response"></div>
+    <div id="response" style="margin-top:1rem; font-weight:500;"></div>
     <button id="toggleDarkMode">Toggle Dark Mode</button>
     <p class="admin-link"><a href="/admin/login.html">Go to Admin Panel</a></p>
   </div>

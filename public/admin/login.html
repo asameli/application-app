@@ -4,11 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
 </head>
-<body>
-  <div class="container fancy-card">
+<body class="admin-body">
+  <header class="header-bar">
+    <div class="logo">surwave</div>
     <h1 class="fancy-title">Admin Login</h1>
+  </header>
+  <div class="container fancy-card">
     <form action="/admin/login" method="POST">
       <label for="username">Username:</label>
       <input type="text" name="username" required>
@@ -18,7 +24,7 @@
 
       <button type="submit">Login</button>
     </form>
-    <div id="error">
+    <div id="error" style="margin-top:1rem;">
       <!-- Display errors if any, e.g. ?error=Invalid credentials -->
     </div>
   </div>
