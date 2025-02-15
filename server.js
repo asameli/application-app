@@ -233,3 +233,15 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+
+app.get('/test-permission', (req, res) => {
+    fs.writeFile('uploads/test.txt', 'Hello from Node', (err) => {
+      if (err) {
+        console.error('Write test error:', err);
+        return res.status(500).send(`Write failed: ${err.message}`);
+      }
+      res.send('Write succeeded!');
+    });
+  });
+  
