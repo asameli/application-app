@@ -51,9 +51,7 @@
           <th>Actions</th>
         </tr>
       </thead>
-      <tbody>
-        <!-- Apps here -->
-      </tbody>
+      <tbody></tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
 
@@ -70,27 +68,10 @@
 
       <button type="submit">Update Templates</button>
     </form>
-
-    <h2 class="section-title">Email Logs</h2>
-    <table class="apps-table" id="emailLogsTable">
-      <thead>
-        <tr>
-          <th>To</th>
-          <th>Subject</th>
-          <th>Message</th>
-          <th>Success?</th>
-          <th>Created At</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Email logs here -->
-      </tbody>
-    </table>
-    <div id="emptyEmailLogs" class="empty-message" style="display:none;">No email logs found.</div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.0</span>
+    <span>Version 1.1.1</span>
   </footer>
 
   <script>
@@ -159,7 +140,8 @@
       } catch(e) { return 'Invalid docs'; }
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
       return docs.map(docPath => {
-        const filename = docPath.split('/').pop();
+        const filename = docPath.split('/').pop(); 
+        // docPath like 'uploads/xxxx.pdf'
         return `<a href=\"/${docPath}\" download=\"${filename}\">${filename}</a>`;
       }).join('<br>');
     }
@@ -169,16 +151,6 @@
         .then(r => r.json())
         .then(data => {
           document.getElementById('appCount').innerText = data.count;
-        });
-    }
-
-    function fetchTemplates() {
-      fetch('/admin/api/templates')
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById('thankYou').value = data.thankYou;
-          document.getElementById('accepted').value = data.accepted;
-          document.getElementById('rejected').value = data.rejected;
         });
     }
 
@@ -221,36 +193,18 @@
       .then(data => alert(data.message));
     });
 
-    function fetchEmailLogs() {
-      fetch('/admin/api/email-logs')
+    // initial load
+    fetchApplications();
+    function initTemplates() {
+      fetch('/admin/api/templates')
         .then(r => r.json())
         .then(data => {
-          const tableBody = document.querySelector('#emailLogsTable tbody');
-          const emptyEmailLogs = document.getElementById('emptyEmailLogs');
-          tableBody.innerHTML = '';
-          if (data.length === 0) {
-            emptyEmailLogs.style.display = 'block';
-          } else {
-            emptyEmailLogs.style.display = 'none';
-            data.forEach(log => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${log.to_email}</td>
-                <td>${log.subject}</td>
-                <td><pre style=\"white-space:pre-wrap;\">${log.message}</pre></td>
-                <td>${log.success ? 'Yes' : 'No'} ${log.error_message ? '('+log.error_message+')' : ''}</td>
-                <td>${log.created_at}</td>
-              `;
-              tableBody.appendChild(row);
-            });
-          }
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
         });
     }
-
-    // Initial loads
-    fetchApplications();
-    fetchTemplates();
-    fetchEmailLogs();
+    initTemplates();
   </script>
 </body>
 </html>

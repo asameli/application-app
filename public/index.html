@@ -33,11 +33,11 @@
 
       <button type="submit">Submit Application</button>
     </form>
-    <div id="response"></div>
+    <div id="response" style="margin-top:1rem; font-weight:500;"></div>
     <button id="toggleDarkMode">Toggle Dark Mode</button>
   </div>
 
-  <!-- A success overlay -->
+  <!-- success overlay -->
   <div id="successOverlay" style="
     display:none; 
     position:fixed; 
@@ -69,12 +69,11 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.0</span>
+    <span>Version 1.1.1</span>
   </footer>
 
   <script src="main.js"></script>
   <script>
-    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -105,20 +104,15 @@
           method: 'POST',
           body: formData
         });
-        if (!resp.ok) {
-          const text = await resp.text();
-          responseElem.innerHTML = text;
-          return;
-        }
-        const data = await resp.json();
+        const data = await resp.json(); // Now we properly parse JSON
         if (data.success) {
-          // show overlay with success message
+          // Show overlay
           document.getElementById('overlayMessage').innerText = data.message;
           document.getElementById('successOverlay').style.display = 'flex';
           responseElem.innerHTML = '';
           form.reset();
         } else {
-          responseElem.innerHTML = data.message || 'Error occurred';
+          responseElem.innerHTML = data.error || 'An error occurred.';
         }
       } catch (err) {
         responseElem.innerHTML = 'An error occurred: ' + err.message;
