@@ -90,7 +90,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.0</span>
+    <span>Version 1.2.0</span>
   </footer>
 
   <script>
@@ -100,16 +100,16 @@
         const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = '';
         if (data.loggedIn) {
-          navLinks.innerHTML += '<li><a href=\"/\">Application</a></li>';
-          navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
-          navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
+          navLinks.innerHTML += '<li><a href="/">Application</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
         } else {
-          navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
         }
       })
       .catch(() => {
         const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
+        navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
     function fetchApplications() {
@@ -137,11 +137,11 @@
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td class=\"doc-link\">${renderDocuments(app.documents)}</td>
-                <td class=\"actions-cell\">
-                  <button class=\"status-btn accept-btn\" onclick=\"updateStatus('${app.id}', 'accepted')\">Accept</button>
-                  <button class=\"status-btn reject-btn\" onclick=\"updateStatus('${app.id}', 'rejected')\">Reject</button>
-                  <button class=\"delete-btn\" onclick=\"deleteApplication('${app.id}')\">Delete</button>
+                <td class="doc-link">${renderDocuments(app.documents)}</td>
+                <td class="actions-cell">
+                  <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
+                  <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
+                  <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
                 </td>
               `;
               tableBody.appendChild(row);
@@ -151,6 +151,7 @@
         });
     }
 
+    // Updated renderDocuments to handle objects with 'path' and 'original'
     function renderDocuments(docJSON) {
       if (!docJSON) return '';
       let docs;
@@ -158,10 +159,7 @@
         docs = JSON.parse(docJSON);
       } catch(e) { return 'Invalid docs'; }
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
-      return docs.map(docPath => {
-        const filename = docPath.split('/').pop();
-        return `<a href=\"/${docPath}\" download=\"${filename}\">${filename}</a>`;
-      }).join('<br>');
+      return docs.map(doc => `<a href="/${doc.path}" download="${doc.original}">${doc.original}</a>`).join('<br>');
     }
 
     function fetchCount() {
@@ -237,7 +235,7 @@
               row.innerHTML = `
                 <td>${log.to_email}</td>
                 <td>${log.subject}</td>
-                <td><pre style=\"white-space:pre-wrap;\">${log.message}</pre></td>
+                <td><pre style="white-space:pre-wrap;">${log.message}</pre></td>
                 <td>${log.success ? 'Yes' : 'No'} ${log.error_message ? '('+log.error_message+')' : ''}</td>
                 <td>${log.created_at}</td>
               `;

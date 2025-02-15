@@ -1,4 +1,4 @@
-// server.js (v1.1.0)
+// server.js (v1.2.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -143,9 +143,9 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   const email = sanitizeInput(req.body.email);
 
   const id = uuid.v4();
-  // store doc paths
-  const docPaths = req.files.map(file => `uploads/${file.filename}`);
-  const documentsJSON = JSON.stringify(docPaths);
+  // Store document paths along with original filenames
+  const docs = req.files.map(file => ({ path: `uploads/${file.filename}`, original: file.originalname }));
+  const documentsJSON = JSON.stringify(docs);
 
   db.run(
     `INSERT INTO applications (id, firstname, lastname, email, documents)
@@ -162,9 +162,11 @@ app.post('/', upload.array('documents', 10), (req, res) => {
         .replace('{{id}}', id);
       sendMail(email, 'Application Received', emailText);
 
-      // Return overlay-friendly success
-      // We can send JSON or HTML; let's do JSON with a success property
-      res.json({ success: true, message: "Application submitted successfully. Your reference ID is: " + id });
+      // Return JSON with a modern overlay-friendly success message
+      res.json({ 
+        success: true, 
+        message: "Your application was submitted successfully! A confirmation email has been sent with your reference ID: " + id 
+      });
     }
   );
 });
@@ -227,7 +229,6 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   }
 
   // Sorting
-  // e.g. sortBy=created_atAsc or created_atDesc
   if (sortBy === 'created_atAsc') {
     baseQuery += " ORDER BY created_at ASC";
   } else if (sortBy === 'created_atDesc') {
@@ -325,5 +326,5 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.1.0 running on port ${PORT}`);
+  console.log(`Server v1.2.0 running on port ${PORT}`);
 });

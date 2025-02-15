@@ -56,7 +56,7 @@
       max-width:400px; 
       text-align:center;">
       <div style="font-size:3rem; color:green;">&#10004;</div>
-      <h2 id="overlayMessage">Success!</h2>
+      <h2 id="overlayMessage">Application Submitted!</h2>
       <button onclick="closeOverlay()" style="
         margin-top:1rem;
         border:none; 
@@ -69,7 +69,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.0</span>
+    <span>Version 1.2.0</span>
   </footer>
 
   <script src="main.js"></script>
@@ -81,16 +81,16 @@
         const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = '';
         if (data.loggedIn) {
-          navLinks.innerHTML += '<li><a href=\"/\">Application</a></li>';
-          navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
-          navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
+          navLinks.innerHTML += '<li><a href="/">Application</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
         } else {
-          navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
         }
       })
       .catch(() => {
         const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
+        navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
     const form = document.getElementById('applicationForm');
