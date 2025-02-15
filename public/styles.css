@@ -1,3 +1,6 @@
+/* v1.1.0 */
+
+/* Shared & Body */
 body {
     font-family: 'Inter', sans-serif;
     margin: 0;
@@ -9,14 +12,13 @@ body {
   .header-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between; /* push nav to the right */
+    justify-content: space-between;
     background-color: #ffffff;
     padding: 1rem;
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
   }
   
   .logo {
-    font-family: 'Inter', sans-serif;
     font-weight: 600;
     font-size: 1.2rem;
     margin-right: 1rem;
@@ -25,7 +27,7 @@ body {
   .top-nav ul {
     display: flex;
     gap: 1rem;
-    list-style: none; /* remove bullet points */
+    list-style: none;
     margin: 0;
     padding: 0;
   }
@@ -35,13 +37,12 @@ body {
     color: #333;
     font-weight: 600;
   }
-  
   .top-nav li a:hover {
     color: #666;
   }
   
   .container {
-    max-width: 1000px; /* wider for better scaling */
+    max-width: 1000px;
     margin: 2em auto;
     padding: 1em;
     background: #ffffff;
@@ -84,7 +85,6 @@ body {
     border: none;
     margin-top: 1.2rem;
   }
-  
   button:hover {
     background-color: #45a049;
   }
@@ -99,13 +99,12 @@ body {
     background-color: #121212;
     color: #e0e0e0;
   }
-  
   .dark .container {
     background-color: #1e1e1e;
     color: #fff;
   }
   
-  /* Admin Styles */
+  /* Admin body background */
   .admin-body {
     background-color: #f5f5f5;
     min-height: 100vh;
@@ -116,17 +115,16 @@ body {
     margin-bottom: 1rem;
   }
   
+  /* Table */
   .apps-table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 1.5rem;
-    table-layout: auto; /* more responsive */
+    table-layout: auto;
   }
-  
   .apps-table thead {
     background-color: #eee;
   }
-  
   .apps-table th, .apps-table td {
     padding: 0.75rem;
     border: 1px solid #ccc;
@@ -143,9 +141,10 @@ body {
   .actions-cell {
     display: flex;
     gap: 0.5rem;
-    flex-wrap: wrap; /* wrap on smaller screens */
+    flex-wrap: wrap;
   }
   
+  /* Buttons */
   .status-btn {
     padding: 0.4rem 0.8rem;
     border: none;
@@ -153,60 +152,26 @@ body {
     cursor: pointer;
     font-family: inherit;
   }
-  
   .accept-btn {
     background-color: #007bff;
     color: #fff;
   }
-  
   .accept-btn:hover {
     background-color: #0069d9;
   }
-  
   .reject-btn {
     background-color: #dc3545;
     color: #fff;
   }
-  
   .reject-btn:hover {
     background-color: #c82333;
   }
-  
   .delete-btn {
     background-color: #6c757d;
     color: #fff;
   }
-  
   .delete-btn:hover {
     background-color: #5a6268;
-  }
-  
-  .logout-link {
-    display: inline-block;
-    margin-top: 1rem;
-    text-decoration: none;
-    color: #333;
-    font-weight: 600;
-  }
-  
-  .section-title {
-    margin-top: 2rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
-  
-  /* Document links styling */
-  .doc-link a {
-    display: inline-block;
-    margin-right: 0.5rem;
-    color: #007bff;
-    text-decoration: none;
-    font-size: 0.9rem;
-    word-break: break-all; /* avoid overflow for long file names */
-  }
-  
-  .doc-link a:hover {
-    text-decoration: underline;
   }
   
   /* Footer */
@@ -216,5 +181,32 @@ body {
     padding: 1rem;
     font-size: 0.9rem;
     color: #666;
+  }
+  
+  /* Doc link styling */
+  .doc-link a {
+    display: inline-block;
+    margin-right: 0.5rem;
+    color: #007bff;
+    text-decoration: none;
+    font-size: 0.9rem;
+    word-break: break-all;
+  }
+  .doc-link a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Overlay changes */
+  #successOverlay {
+    display: none; 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background-color: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
   }
   

@@ -1,4 +1,4 @@
-// server.js
+// server.js (v1.1.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -8,42 +8,58 @@ const fs = require('fs');
 const path = require('path');
 const uuid = require('uuid');
 const { exec } = require('child_process');
+const bcrypt = require('bcryptjs');
+
+// Minimal XSS Sanitization
+function sanitizeInput(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/[<>'"]/g, '') // remove special chars
+    .trim();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Default admin credentials
-const DEFAULT_ADMIN_USERNAME = 'admin';
-const DEFAULT_ADMIN_PASSWORD = 'adminpass';
 
 // Parse URL-encoded and JSON bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Session setup for admin authentication
+// Session for admin auth
 app.use(session({
-  secret: 'your_secret_key', // Replace with an environment variable in production
+  secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
   saveUninitialized: false,
 }));
 
-// Serve static files (including index.html) from the public directory
+// Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve the uploads folder so documents can be downloaded
+// Serve uploads so docs can be downloaded
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Configure Multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+// Configure Multer: store original filename
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    // uuid + original extension
+    const ext = path.extname(file.originalname);
+    const uniqueName = uuid.v4() + ext;
+    cb(null, uniqueName);
+  }
+});
+const upload = multer({ storage });
 
-// Setup SQLite database
+// Database setup
 const db = new sqlite3.Database('./applications.db', (err) => {
   if (err) console.error("DB connection error:", err);
   else console.log('Connected to SQLite database.');
 });
 
-// Create the applications table if it does not exist
+// Create tables if not exist
 db.serialize(() => {
+  // applications table
   db.run(`CREATE TABLE IF NOT EXISTS applications (
     id TEXT PRIMARY KEY,
     firstname TEXT,
@@ -52,14 +68,35 @@ db.serialize(() => {
     documents TEXT,
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) {
-      console.error("DB table creation error:", err);
-    }
+  )`);
+  // email_logs table
+  db.run(`CREATE TABLE IF NOT EXISTS email_logs (
+    id TEXT PRIMARY KEY,
+    to_email TEXT,
+    subject TEXT,
+    message TEXT,
+    success INTEGER,
+    error_message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  // admins table
+  db.run(`CREATE TABLE IF NOT EXISTS admins (
+    username TEXT PRIMARY KEY,
+    password TEXT
+  )`, () => {
+    // Insert default admin if not exist
+    db.get("SELECT * FROM admins WHERE username = ?", ['admin'], (err2, row) => {
+      if (!row) {
+        // Hash default pass 'adminpass'
+        const hashed = bcrypt.hashSync('adminpass', 10);
+        db.run("INSERT INTO admins (username, password) VALUES (?, ?)", ['admin', hashed]);
+        console.log("Inserted default admin user with hashed password.");
+      }
+    });
   });
 });
 
-// Load email templates from a JSON file or use defaults
+// Load email templates
 const templatesFile = path.join(__dirname, 'emailTemplates.json');
 let emailTemplates = {
   thankYou: "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
@@ -70,33 +107,45 @@ if (fs.existsSync(templatesFile)) {
   emailTemplates = JSON.parse(fs.readFileSync(templatesFile));
 }
 
-// Function to send email using Plesk's internal mailer (requires mailutils/postfix/etc.)
+function logEmail(toEmail, subject, message, success, errorMsg) {
+  const eid = uuid.v4();
+  db.run(`INSERT INTO email_logs (id, to_email, subject, message, success, error_message)
+    VALUES (?, ?, ?, ?, ?, ?)`,
+    [eid, toEmail, subject, message, success ? 1 : 0, errorMsg || null]);
+}
+
+// Use system mail command
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" ${to}`;
-  exec(mailCommand, (error, stdout, stderr) => {
+  exec(mailCommand, (error) => {
     if (error) {
       console.error(`Error sending email: ${error.message}`);
+      logEmail(to, subject, message, false, error.message);
     } else {
       console.log(`Email sent to ${to}`);
+      logEmail(to, subject, message, true, null);
     }
   });
 }
 
-//-------------------------------------------------------------
-// ROUTES
-//-------------------------------------------------------------
+//--- ROUTES ---
 
-// GET / => Serve the main page (index.html)
+// Root => index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// POST / => Handle form submission
+// Post => form submission
 app.post('/', upload.array('documents', 10), (req, res) => {
-  const { firstname, lastname, email } = req.body;
+  // minimal XSS sanitization
+  const firstname = sanitizeInput(req.body.firstname);
+  const lastname = sanitizeInput(req.body.lastname);
+  const email = sanitizeInput(req.body.email);
+
   const id = uuid.v4();
-  const documentPaths = req.files.map(file => file.path);
-  const documentsJSON = JSON.stringify(documentPaths);
+  // store doc paths
+  const docPaths = req.files.map(file => `uploads/${file.filename}`);
+  const documentsJSON = JSON.stringify(docPaths);
 
   db.run(
     `INSERT INTO applications (id, firstname, lastname, email, documents)
@@ -107,53 +156,87 @@ app.post('/', upload.array('documents', 10), (req, res) => {
         console.error("DB insert error:", err);
         return res.status(500).send(`Database error: ${err.message}`);
       }
-      // Send automated thank-you email
+      // send email
       const emailText = emailTemplates.thankYou
         .replace('{{firstname}}', firstname)
         .replace('{{id}}', id);
       sendMail(email, 'Application Received', emailText);
 
-      res.send("Application submitted successfully. Your reference ID is: " + id);
+      // Return overlay-friendly success
+      // We can send JSON or HTML; let's do JSON with a success property
+      res.json({ success: true, message: "Application submitted successfully. Your reference ID is: " + id });
     }
   );
 });
 
-// Admin login endpoint
+// Admin login
 app.post('/admin/login', (req, res) => {
-  const { username, password } = req.body;
-  // Use the default admin credentials
-  if (username === DEFAULT_ADMIN_USERNAME && password === DEFAULT_ADMIN_PASSWORD) {
+  const username = sanitizeInput(req.body.username);
+  const password = req.body.password || '';
+
+  db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
+    if (err) {
+      console.error("Admin login db error:", err);
+      return res.redirect('/admin/login.html?error=DbError');
+    }
+    if (!row) {
+      return res.redirect('/admin/login.html?error=NoUser');
+    }
+    // Compare password
+    const match = bcrypt.compareSync(password, row.password);
+    if (!match) {
+      return res.redirect('/admin/login.html?error=BadPass');
+    }
     req.session.admin = username;
-    return res.redirect('/admin/dashboard.html');
-  }
-  res.redirect('/admin/login.html?error=Invalid credentials');
+    res.redirect('/admin/dashboard.html');
+  });
 });
 
-// Admin logout endpoint
+// Admin logout
 app.get('/admin/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/admin/login.html');
 });
 
-// Middleware to protect admin routes
+// Middleware for admin routes
 function adminAuth(req, res, next) {
-  if (req.session && req.session.admin) {
-    return next();
-  }
+  if (req.session && req.session.admin) return next();
   return res.redirect('/admin/login.html');
 }
 
-// API: Return if admin is logged in
+// Check if admin is logged in
 app.get('/admin/api/status', (req, res) => {
-  if (req.session && req.session.admin) {
-    return res.json({ loggedIn: true });
-  }
-  return res.json({ loggedIn: false });
+  if (req.session && req.session.admin) return res.json({ loggedIn: true });
+  res.json({ loggedIn: false });
 });
 
-// API: Retrieve all applications for the admin dashboard (newest first)
+// Filter & Sort Applications
 app.get('/admin/api/applications', adminAuth, (req, res) => {
-  db.all("SELECT * FROM applications ORDER BY created_at DESC", [], (err, rows) => {
+  const { status, sortBy } = req.query; // status=accepted/pending/rejected, sortBy=created_atAsc, etc.
+
+  let baseQuery = "SELECT * FROM applications";
+  const conditions = [];
+  const params = [];
+
+  if (status && ['pending','accepted','rejected'].includes(status)) {
+    conditions.push("status = ?");
+    params.push(status);
+  }
+  if (conditions.length > 0) {
+    baseQuery += " WHERE " + conditions.join(" AND ");
+  }
+
+  // Sorting
+  // e.g. sortBy=created_atAsc or created_atDesc
+  if (sortBy === 'created_atAsc') {
+    baseQuery += " ORDER BY created_at ASC";
+  } else if (sortBy === 'created_atDesc') {
+    baseQuery += " ORDER BY created_at DESC";
+  } else {
+    baseQuery += " ORDER BY created_at DESC"; // default
+  }
+
+  db.all(baseQuery, params, (err, rows) => {
     if (err) {
       console.error("DB fetch error (list apps):", err);
       return res.status(500).json({ error: `Database error: ${err.message}` });
@@ -162,7 +245,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   });
 });
 
-// API: Update application status (accepted or rejected)
+// Update status
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -183,7 +266,6 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      // Send acceptance or rejection email using the updated template
       let template = status === 'accepted' ? emailTemplates.accepted : emailTemplates.rejected;
       let emailText = template
         .replace('{{firstname}}', row.firstname)
@@ -194,7 +276,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   });
 });
 
-// API: Delete application
+// Delete application
 app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   const id = req.params.id;
   db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
@@ -209,7 +291,7 @@ app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   });
 });
 
-// API: Get the total count of applications
+// Count applications
 app.get('/admin/api/count', adminAuth, (req, res) => {
   db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
     if (err) {
@@ -220,18 +302,28 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// API: Get and update email templates
+// Email logs endpoint
+app.get('/admin/api/email-logs', adminAuth, (req, res) => {
+  db.all("SELECT * FROM email_logs ORDER BY created_at DESC", [], (err, rows) => {
+    if (err) {
+      console.error("DB email_logs fetch error:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    res.json(rows);
+  });
+});
+
+// Get/Update email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   res.json(emailTemplates);
 });
-
 app.post('/admin/api/templates', adminAuth, (req, res) => {
   emailTemplates = req.body;
   fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
   res.json({ message: "Templates updated" });
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server v1.1.0 running on port ${PORT}`);
 });

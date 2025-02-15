@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Admin Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,6 +18,26 @@
   </header>
 
   <div class="container fancy-card">
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+      <div>
+        <label>Status Filter:</label>
+        <select id="statusFilter">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div>
+        <label>Sort By:</label>
+        <select id="sortBy">
+          <option value="created_atDesc">Created (newest)</option>
+          <option value="created_atAsc">Created (oldest)</option>
+        </select>
+      </div>
+      <button onclick="fetchApplications()">Apply</button>
+    </div>
+
     <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
     <table class="apps-table" id="applicationsTable">
       <thead>
@@ -32,7 +52,7 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Applications will be dynamically inserted here -->
+        <!-- Apps here -->
       </tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
@@ -50,14 +70,30 @@
 
       <button type="submit">Update Templates</button>
     </form>
+
+    <h2 class="section-title">Email Logs</h2>
+    <table class="apps-table" id="emailLogsTable">
+      <thead>
+        <tr>
+          <th>To</th>
+          <th>Subject</th>
+          <th>Message</th>
+          <th>Success?</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Email logs here -->
+      </tbody>
+    </table>
+    <div id="emptyEmailLogs" class="empty-message" style="display:none;">No email logs found.</div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.0.2</span>
+    <span>Version 1.1.0</span>
   </footer>
 
   <script>
-    // Build a top nav dynamically, similar to index.html
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -68,20 +104,23 @@
           navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
           navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
         } else {
-          // If user isn't admin, show login
           navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
         }
       })
       .catch(() => {
-        // fallback
         const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
       });
 
-    // Fetch and display applications
     function fetchApplications() {
-      fetch('/admin/api/applications')
-        .then(response => response.json())
+      const status = document.getElementById('statusFilter').value;
+      const sort = document.getElementById('sortBy').value;
+      let url = `/admin/api/applications?`;
+      if (status) url += `status=${status}&`;
+      if (sort) url += `sortBy=${sort}`;
+
+      fetch(url)
+        .then(r => r.json())
         .then(data => {
           const tableBody = document.querySelector('#applicationsTable tbody');
           const emptyMessage = document.getElementById('emptyMessage');
@@ -108,46 +147,34 @@
               tableBody.appendChild(row);
             });
           }
+          fetchCount();
         });
     }
 
-    // Renders clickable download links for each document
-    function renderDocuments(documentsJSON) {
-      if (!documentsJSON) return '';
+    function renderDocuments(docJSON) {
+      if (!docJSON) return '';
       let docs;
       try {
-        docs = JSON.parse(documentsJSON);
-      } catch (e) {
-        return ''; // or 'Invalid docs'
-      }
+        docs = JSON.parse(docJSON);
+      } catch(e) { return 'Invalid docs'; }
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
-      // For each doc path, create a link. We assume /uploads is served statically
       return docs.map(docPath => {
         const filename = docPath.split('/').pop();
-        // docPath might be absolute. If so, we convert to relative if needed
-        // In your server.js, we do app.use('/uploads', express.static('uploads'));
-        // so the doc path must be /uploads/filename
-        const shortPath = docPath.startsWith('uploads/')
-          ? `/${docPath}`
-          : docPath.replace(/^.*uploads\//, '/uploads/');
-
-        return `<a href=\"${shortPath}\" download=\"${filename}\">${filename}</a>`;
+        return `<a href=\"/${docPath}\" download=\"${filename}\">${filename}</a>`;
       }).join('<br>');
     }
 
-    // Fetch application count
     function fetchCount() {
       fetch('/admin/api/count')
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
           document.getElementById('appCount').innerText = data.count;
         });
     }
 
-    // Fetch email templates
     function fetchTemplates() {
       fetch('/admin/api/templates')
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
           document.getElementById('thankYou').value = data.thankYou;
           document.getElementById('accepted').value = data.accepted;
@@ -155,45 +182,32 @@
         });
     }
 
-    // Update application status
     function updateStatus(id, status) {
       fetch(`/admin/api/application/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       })
-      .then(response => response.json())
+      .then(r => r.json())
       .then(data => {
         alert(data.message || data.error);
         fetchApplications();
-        fetchCount();
       });
     }
 
-    // Delete application
     function deleteApplication(id) {
-      if (!confirm('Are you sure you want to delete this application?')) {
-        return;
-      }
-      fetch(`/admin/api/application/${id}`, {
-        method: 'DELETE'
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) {
-          alert(data.error);
-        } else {
-          alert(data.message);
-        }
-        fetchApplications();
-        fetchCount();
-      });
+      if (!confirm('Delete this application?')) return;
+      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          alert(data.message || data.error);
+          fetchApplications();
+        });
     }
 
-    // Handle email template updates
-    document.getElementById('templatesForm').addEventListener('submit', (e) => {
+    document.getElementById('templatesForm').addEventListener('submit', e => {
       e.preventDefault();
-      const templates = {
+      const body = {
         thankYou: document.getElementById('thankYou').value,
         accepted: document.getElementById('accepted').value,
         rejected: document.getElementById('rejected').value
@@ -201,16 +215,42 @@
       fetch('/admin/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(templates)
+        body: JSON.stringify(body)
       })
-      .then(response => response.json())
+      .then(r => r.json())
       .then(data => alert(data.message));
     });
 
-    // Initial fetches
+    function fetchEmailLogs() {
+      fetch('/admin/api/email-logs')
+        .then(r => r.json())
+        .then(data => {
+          const tableBody = document.querySelector('#emailLogsTable tbody');
+          const emptyEmailLogs = document.getElementById('emptyEmailLogs');
+          tableBody.innerHTML = '';
+          if (data.length === 0) {
+            emptyEmailLogs.style.display = 'block';
+          } else {
+            emptyEmailLogs.style.display = 'none';
+            data.forEach(log => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${log.to_email}</td>
+                <td>${log.subject}</td>
+                <td><pre style=\"white-space:pre-wrap;\">${log.message}</pre></td>
+                <td>${log.success ? 'Yes' : 'No'} ${log.error_message ? '('+log.error_message+')' : ''}</td>
+                <td>${log.created_at}</td>
+              `;
+              tableBody.appendChild(row);
+            });
+          }
+        });
+    }
+
+    // Initial loads
     fetchApplications();
-    fetchCount();
     fetchTemplates();
+    fetchEmailLogs();
   </script>
 </body>
 </html>

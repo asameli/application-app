@@ -1,42 +1,49 @@
-# Apartment Application Mailbox
+# Apartment Application Mailbox (v1.1.0)
 
-A Node.js/Express application for managing apartment applications. This system provides a public frontend where applicants can fill in their information and upload documents, and a secure admin backend for managing, viewing, and updating the status of each application. Automated emails (thank-you, acceptance, and rejection) are sent to applicants, and email templates can be adjusted via the admin interface.
+A Node.js/Express application for managing apartment applications. This system provides:
+- A public frontend where applicants can fill in their information and upload documents.
+- A secure admin backend for viewing, updating, deleting, and filtering/sorting applications.
+- Automated emails upon submission/status changes (with a new email log).
+- Document downloads (original file names).
+- Production-grade security improvements (hashed admin password, minimal XSS checks).
 
 ---
 
 ## Features
 
-- **Responsive Frontend:**  
-  Modern, responsive design with a dark mode toggle.
-
-- **Secure Application Form:**  
-  Applicants submit their first name, last name, email, and multiple document uploads.
-
-- **Data Storage:**  
-  All applications are stored in a SQLite database with a unique application ID.
-
-- **Automated Email Notifications:**  
-  Emails are sent upon submission and status updates (accepted or rejected) using Nodemailer.
-
-- **Admin Backend:**  
-  Secure, session-protected dashboard to view applications, update status, and customize email templates.
-
-- **Deployment Script:**  
-  A deployment script (`deploy.sh`) sets up the database and file structure.
-
-- **GitHub Auto-Deployment on Plesk:**  
-  Configure Plesk's Git extension to automatically deploy code updates from your GitHub repository.
+- **Responsive Frontend**:  
+  Modern design with a dark mode toggle and surwave branding.
+- **Secure Form**:  
+  Applicants submit data, which is sanitized to prevent XSS.
+- **Data Storage**:  
+  All applications stored in a SQLite database (`applications.db`) plus an `email_logs` table.
+- **Automated Email**:  
+  Email logs are stored in `email_logs` with a success/fail indication.
+- **Admin Backend**:  
+  1. Filter and sort applications by status/date.  
+  2. View, accept/reject, delete, and see logs of sent emails.  
+  3. Hashed admin password in a separate `admins` table.
+- **Deployment Script**:  
+  `deploy.sh` for setting up the database/tables.
+- **GitHub Auto-Deployment on Plesk**:  
+  Use Plesk’s Git extension for automatic deployments.
 
 ---
 
-## Getting Started
+## Security and Admin Password
 
-### Prerequisites
-
-- **Node.js** (v12 or higher)
-- **npm**
-- **SQLite3**
-- **Plesk Hosting Plan** with Node.js and Git support
+- The default admin user is stored in the `admins` table with a **bcrypt-hashed** password.  
+- **Changing Admin Password**:
+  1. Install `bcryptjs` if not already installed.
+  2. Hash your new password:
+     ```bash
+     node -e \"console.log(require('bcryptjs').hashSync('NEW_PASS', 10))\"
+     ```
+  3. Update the `admins` table:
+     ```sql
+     UPDATE admins SET password='the_bcrypt_hash' WHERE username='admin';
+     ```
+  4. Restart Node.js in Plesk or re-run your app.
 
 ---
 
