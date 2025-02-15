@@ -18,7 +18,6 @@
   </header>
 
   <div class="container fancy-card">
-    <!-- Filter & Sort -->
     <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
       <div>
         <label>Status Filter:</label>
@@ -40,8 +39,6 @@
     </div>
 
     <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
-
-    <!-- Applications Table -->
     <table class="apps-table" id="applicationsTable">
       <thead>
         <tr>
@@ -95,7 +92,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.2</span>
+    <span>Version 1.2.0</span>
   </footer>
 
   <script>
@@ -118,14 +115,13 @@
         navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
       });
 
-    // Fetch & Render Applications
+    // fetch & display
     function fetchApplications() {
       const status = document.getElementById('statusFilter').value;
       const sort = document.getElementById('sortBy').value;
       let url = `/admin/api/applications?`;
       if (status) url += `status=${status}&`;
       if (sort) url += `sortBy=${sort}`;
-
       fetch(url)
         .then(r => r.json())
         .then(data => {
@@ -156,9 +152,7 @@
           }
           fetchCount();
         })
-        .catch(err => {
-          console.error('fetchApplications error:', err);
-        });
+        .catch(err => console.error('fetchApplications error:', err));
     }
 
     function renderDocuments(docJSON) {
@@ -208,7 +202,7 @@
         .catch(err => console.error('deleteApplication error:', err));
     }
 
-    // Email Templates
+    // Email templates
     function initTemplates() {
       fetch('/admin/api/templates')
         .then(r => r.json())
@@ -216,7 +210,8 @@
           document.getElementById('thankYou').value = data.thankYou;
           document.getElementById('accepted').value = data.accepted;
           document.getElementById('rejected').value = data.rejected;
-        });
+        })
+        .catch(err => console.error('initTemplates error:', err));
     }
     document.getElementById('templatesForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -232,10 +227,10 @@
       })
       .then(r => r.json())
       .then(data => alert(data.message))
-      .catch(err => console.error('template update error:', err));
+      .catch(err => console.error('update templates error:', err));
     });
 
-    // Mail Config
+    // Mail config (from mailConfig.json)
     function initMailConfig() {
       fetch('/admin/api/mail-config')
         .then(r => r.json())
@@ -243,4 +238,34 @@
           document.getElementById('mailHost').value = cfg.host || '';
           document.getElementById('mailPort').value = cfg.port || 587;
           document.getElementById('mailSecure').checked = !!cfg.secure;
-          document.getElementById('mailUser').v
+          document.getElementById('mailUser').value = cfg.user || '';
+          document.getElementById('mailPass').value = cfg.pass || '';
+        })
+        .catch(err => console.error('initMailConfig error:', err));
+    }
+    document.getElementById('mailConfigForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const body = {
+        host: document.getElementById('mailHost').value,
+        port: parseInt(document.getElementById('mailPort').value, 10),
+        secure: document.getElementById('mailSecure').checked,
+        user: document.getElementById('mailUser').value,
+        pass: document.getElementById('mailPass').value
+      };
+      fetch('/admin/api/mail-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(r => r.json())
+      .then(data => alert(data.message))
+      .catch(err => console.error('mailConfig update error:', err));
+    });
+
+    // init
+    fetchApplications();
+    initTemplates();
+    initMailConfig();
+  </script>
+</body>
+</html>

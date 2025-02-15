@@ -1,4 +1,4 @@
-// server.js (v1.1.2)
+// server.js (v1.2.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -19,42 +19,42 @@ function sanitizeInput(str) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Body parsers & session
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
   saveUninitialized: false,
 }));
 
-// Serve static files (including index.html)
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Configure Multer (keep original extension)
+// Configure Multer to keep the original extension
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueName = uuid.v4() + ext.toLowerCase();
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = uuid.v4() + ext;
     cb(null, uniqueName);
   }
 });
 const upload = multer({ storage });
 
-// Database
+// Setup SQLite
 const db = new sqlite3.Database('./applications.db', (err) => {
-  if (err) console.error("DB connection error:", err);
+  if (err) console.error('DB connection error:', err);
   else console.log('Connected to SQLite database.');
 });
 
-// Create tables if needed
+// Create or update necessary tables
 db.serialize(() => {
-  // applications
+  // Table: applications
   db.run(`CREATE TABLE IF NOT EXISTS applications (
     id TEXT PRIMARY KEY,
     firstname TEXT,
@@ -64,7 +64,8 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  // admins
+
+  // Table: admins
   db.run(`CREATE TABLE IF NOT EXISTS admins (
     username TEXT PRIMARY KEY,
     password TEXT
@@ -77,27 +78,9 @@ db.serialize(() => {
       }
     });
   });
-  // mail_config
-  db.run(`CREATE TABLE IF NOT EXISTS mail_config (
-    id INTEGER PRIMARY KEY,
-    host TEXT,
-    port INTEGER,
-    secure INTEGER,
-    user TEXT,
-    pass TEXT
-  )`, () => {
-    // Insert default config if none
-    db.get("SELECT * FROM mail_config WHERE id = 1", [], (err2, row) => {
-      if (!row) {
-        db.run(`INSERT INTO mail_config (id, host, port, secure, user, pass)
-                VALUES (1, 'smtp.example.com', 587, 0, 'username@example.com', 'password')`);
-        console.log("Inserted default mail config.");
-      }
-    });
-  });
 });
 
-// Load email templates from file or default
+// emailTemplates.json
 const templatesFile = path.join(__dirname, 'emailTemplates.json');
 let emailTemplates = {
   thankYou: "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
@@ -108,32 +91,33 @@ if (fs.existsSync(templatesFile)) {
   emailTemplates = JSON.parse(fs.readFileSync(templatesFile));
 }
 
-// Function to get current mail config from db
-async function getMailConfig() {
-  return new Promise((resolve, reject) => {
-    db.get("SELECT * FROM mail_config WHERE id = 1", [], (err, row) => {
-      if (err) return reject(err);
-      if (!row) return reject(new Error("No mail config found."));
-      resolve(row);
-    });
-  });
+// mailConfig.json
+const mailConfigFile = path.join(__dirname, 'mailConfig.json');
+let mailConfig = {
+  host: "smtp.example.com",
+  port: 587,
+  secure: false,
+  user: "username@example.com",
+  pass: "password"
+};
+if (fs.existsSync(mailConfigFile)) {
+  mailConfig = JSON.parse(fs.readFileSync(mailConfigFile));
 }
 
-// Send email via nodemailer
+// Use nodemailer with the config from mailConfig
 async function sendMail(to, subject, message) {
   try {
-    const conf = await getMailConfig();
     let transporter = nodemailer.createTransport({
-      host: conf.host,
-      port: conf.port,
-      secure: !!conf.secure,
+      host: mailConfig.host,
+      port: mailConfig.port,
+      secure: mailConfig.secure,
       auth: {
-        user: conf.user,
-        pass: conf.pass
+        user: mailConfig.user,
+        pass: mailConfig.pass
       }
     });
     await transporter.sendMail({
-      from: conf.user,
+      from: mailConfig.user,
       to,
       subject,
       text: message
@@ -144,14 +128,14 @@ async function sendMail(to, subject, message) {
   }
 }
 
-//--- ROUTES ---
+// ----- ROUTES -----
 
-// Serve index
+// GET / => index
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Post => submit app
+// POST / => handle new application
 app.post('/', upload.array('documents', 10), async (req, res) => {
   try {
     const firstname = sanitizeInput(req.body.firstname);
@@ -171,13 +155,13 @@ app.post('/', upload.array('documents', 10), async (req, res) => {
           console.error("DB insert error:", err);
           return res.status(500).json({ success: false, error: `Database error: ${err.message}` });
         }
-        // Send email
+        // send email
         const emailText = emailTemplates.thankYou
           .replace('{{firstname}}', firstname)
           .replace('{{id}}', id);
         await sendMail(email, 'Application Received', emailText);
 
-        // Return valid JSON
+        // return valid JSON
         return res.json({
           success: true,
           message: "Application submitted successfully. Your reference ID is: " + id
@@ -185,7 +169,7 @@ app.post('/', upload.array('documents', 10), async (req, res) => {
       }
     );
   } catch (ex) {
-    console.error("Post / error:", ex);
+    console.error("POST / error:", ex);
     return res.status(500).json({ success: false, error: ex.message });
   }
 });
@@ -225,7 +209,9 @@ function adminAuth(req, res, next) {
 
 // Admin status
 app.get('/admin/api/status', (req, res) => {
-  if (req.session && req.session.admin) return res.json({ loggedIn: true });
+  if (req.session && req.session.admin) {
+    return res.json({ loggedIn: true });
+  }
   res.json({ loggedIn: false });
 });
 
@@ -236,7 +222,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   const conditions = [];
   const params = [];
 
-  // status filter
+  // If user selected a status
   if (status && ['pending','accepted','rejected'].includes(status)) {
     conditions.push("status = ?");
     params.push(status);
@@ -262,13 +248,13 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
 });
 
 // Update status
-app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
+app.post('/admin/api/application/:id/status', adminAuth, async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
   if (!['accepted','rejected'].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
-  db.get("SELECT * FROM applications WHERE id = ?", [id], (err, row) => {
+  db.get("SELECT * FROM applications WHERE id = ?", [id], async (err, row) => {
     if (err) {
       console.error("DB fetch error (status update):", err);
       return res.status(500).json({ error: `Database error: ${err.message}` });
@@ -281,7 +267,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      let template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
+      let template = status === 'accepted' ? emailTemplates.accepted : emailTemplates.rejected;
       let emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
       await sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
@@ -314,46 +300,21 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   res.json({ message: "Templates updated" });
 });
 
-// Mail config: get & update host/port/secure/user/pass
+// Mail config (from mailConfig.json)
 app.get('/admin/api/mail-config', adminAuth, (req, res) => {
-  db.get("SELECT * FROM mail_config WHERE id = 1", (err, row) => {
-    if (err) {
-      console.error("mail-config fetch error:", err);
-      return res.status(500).json({ error: `DB error: ${err.message}` });
-    }
-    if (!row) {
-      return res.json({
-        host: "",
-        port: 587,
-        secure: false,
-        user: "",
-        pass: ""
-      });
-    }
-    res.json({
-      host: row.host,
-      port: row.port,
-      secure: !!row.secure,
-      user: row.user,
-      pass: row.pass
-    });
-  });
+  res.json(mailConfig);
 });
 app.post('/admin/api/mail-config', adminAuth, (req, res) => {
   const { host, port, secure, user, pass } = req.body;
-  db.run(
-    "UPDATE mail_config SET host=?, port=?, secure=?, user=?, pass=? WHERE id = 1",
-    [host, port, secure ? 1 : 0, user, pass],
-    function(err) {
-      if (err) {
-        console.error("mail-config update error:", err);
-        return res.status(500).json({ error: `DB error: ${err.message}` });
-      }
-      res.json({ message: "Mail config updated" });
-    }
-  );
+  mailConfig.host = host || 'smtp.example.com';
+  mailConfig.port = parseInt(port, 10) || 587;
+  mailConfig.secure = !!secure;
+  mailConfig.user = user || '';
+  mailConfig.pass = pass || '';
+  fs.writeFileSync(mailConfigFile, JSON.stringify(mailConfig, null, 2));
+  return res.json({ message: 'Mail config updated' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server v1.1.2 running on port ${PORT}`);
+  console.log(`Server v1.2.0 running on port ${PORT}`);
 });
