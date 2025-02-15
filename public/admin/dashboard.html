@@ -18,6 +18,7 @@
   </header>
 
   <div class="container fancy-card">
+    <!-- Filter & Sort -->
     <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
       <div>
         <label>Status Filter:</label>
@@ -39,6 +40,8 @@
     </div>
 
     <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
+
+    <!-- Applications Table -->
     <table class="apps-table" id="applicationsTable">
       <thead>
         <tr>
@@ -68,13 +71,35 @@
 
       <button type="submit">Update Templates</button>
     </form>
+
+    <h2 class="section-title">SMTP Mail Configuration</h2>
+    <form id="mailConfigForm">
+      <label for="mailHost">SMTP Host:</label>
+      <input type="text" id="mailHost" name="mailHost">
+
+      <label for="mailPort">SMTP Port:</label>
+      <input type="number" id="mailPort" name="mailPort">
+
+      <label for="mailSecure">Secure (TLS/SSL):</label>
+      <input type="checkbox" id="mailSecure" name="mailSecure">
+
+      <label for="mailUser">SMTP User:</label>
+      <input type="text" id="mailUser" name="mailUser">
+
+      <label for="mailPass">SMTP Password:</label>
+      <input type="password" id="mailPass" name="mailPass">
+
+      <button type="submit">Update Mail Config</button>
+    </form>
+
   </div>
 
   <footer class="footer">
-    <span>Version 1.1.1</span>
+    <span>Version 1.1.2</span>
   </footer>
 
   <script>
+    // Nav
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -93,6 +118,7 @@
         navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
       });
 
+    // Fetch & Render Applications
     function fetchApplications() {
       const status = document.getElementById('statusFilter').value;
       const sort = document.getElementById('sortBy').value;
@@ -106,7 +132,7 @@
           const tableBody = document.querySelector('#applicationsTable tbody');
           const emptyMessage = document.getElementById('emptyMessage');
           tableBody.innerHTML = '';
-          if (data.length === 0) {
+          if (!Array.isArray(data) || data.length === 0) {
             emptyMessage.style.display = 'block';
           } else {
             emptyMessage.style.display = 'none';
@@ -129,6 +155,9 @@
             });
           }
           fetchCount();
+        })
+        .catch(err => {
+          console.error('fetchApplications error:', err);
         });
     }
 
@@ -140,8 +169,7 @@
       } catch(e) { return 'Invalid docs'; }
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
       return docs.map(docPath => {
-        const filename = docPath.split('/').pop(); 
-        // docPath like 'uploads/xxxx.pdf'
+        const filename = docPath.split('/').pop();
         return `<a href=\"/${docPath}\" download=\"${filename}\">${filename}</a>`;
       }).join('<br>');
     }
@@ -150,8 +178,9 @@
       fetch('/admin/api/count')
         .then(r => r.json())
         .then(data => {
-          document.getElementById('appCount').innerText = data.count;
-        });
+          document.getElementById('appCount').innerText = data.count || 0;
+        })
+        .catch(err => console.error('fetchCount error:', err));
     }
 
     function updateStatus(id, status) {
@@ -164,7 +193,8 @@
       .then(data => {
         alert(data.message || data.error);
         fetchApplications();
-      });
+      })
+      .catch(err => console.error('updateStatus error:', err));
     }
 
     function deleteApplication(id) {
@@ -174,9 +204,20 @@
         .then(data => {
           alert(data.message || data.error);
           fetchApplications();
-        });
+        })
+        .catch(err => console.error('deleteApplication error:', err));
     }
 
+    // Email Templates
+    function initTemplates() {
+      fetch('/admin/api/templates')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
+        });
+    }
     document.getElementById('templatesForm').addEventListener('submit', e => {
       e.preventDefault();
       const body = {
@@ -190,21 +231,16 @@
         body: JSON.stringify(body)
       })
       .then(r => r.json())
-      .then(data => alert(data.message));
+      .then(data => alert(data.message))
+      .catch(err => console.error('template update error:', err));
     });
 
-    // initial load
-    fetchApplications();
-    function initTemplates() {
-      fetch('/admin/api/templates')
+    // Mail Config
+    function initMailConfig() {
+      fetch('/admin/api/mail-config')
         .then(r => r.json())
-        .then(data => {
-          document.getElementById('thankYou').value = data.thankYou;
-          document.getElementById('accepted').value = data.accepted;
-          document.getElementById('rejected').value = data.rejected;
-        });
-    }
-    initTemplates();
-  </script>
-</body>
-</html>
+        .then(cfg => {
+          document.getElementById('mailHost').value = cfg.host || '';
+          document.getElementById('mailPort').value = cfg.port || 587;
+          document.getElementById('mailSecure').checked = !!cfg.secure;
+          document.getElementById('mailUser').v
