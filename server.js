@@ -1,4 +1,4 @@
-// server.js (Restored & Fixed Version)
+// server.js (Stable Version)
 
 const express = require('express');
 const session = require('express-session');
@@ -16,22 +16,25 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({
-  secret: 'your_secret_key',
+  secret: 'your_secret_key', // Replace with an env var in production
   resave: false,
   saveUninitialized: false,
 }));
 
 // Serve static files
-app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Database Connection
+// Database
 const db = new sqlite3.Database('./applications.db', (err) => {
-  if (err) console.error("DB connection error:", err);
-  else console.log('Connected to SQLite database.');
+  if (err) {
+    console.error('DB connection error:', err);
+  } else {
+    console.log('Connected to SQLite database.');
+  }
 });
 
-// Create tables
+// Create tables if not exist
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS applications (
     id TEXT PRIMARY KEY,
@@ -42,58 +45,79 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS admins (
     username TEXT PRIMARY KEY,
     password TEXT
   )`, () => {
     db.get("SELECT * FROM admins WHERE username = ?", ['admin'], (err2, row) => {
       if (!row) {
+        // Insert default admin with hashed password 'adminpass'
         const hashed = bcrypt.hashSync('adminpass', 10);
         db.run("INSERT INTO admins (username, password) VALUES (?, ?)", ['admin', hashed]);
-        console.log("Inserted default admin user.");
+        console.log("Inserted default admin user with hashed password.");
       }
     });
   });
 });
 
-// File Upload Configuration
+// Configure multer to keep file’s original extension
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, uuid.v4() + ext.toLowerCase());
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = uuid.v4() + ext;
+    cb(null, uniqueName);
   }
 });
 const upload = multer({ storage });
 
-// Serve Index Page
-app.get('/', (req, res) => res.sendFile(__dirname + '/public/index.html'));
+// Serve main index
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-// Submit Application
+// POST => application form
 app.post('/', upload.array('documents', 10), (req, res) => {
   const { firstname, lastname, email } = req.body;
   const id = uuid.v4();
-  const documents = JSON.stringify(req.files.map(file => `uploads/${file.filename}`));
+  // Store doc paths with original extension
+  const docPaths = req.files.map(file => `uploads/${file.filename}`);
+  const documentsJSON = JSON.stringify(docPaths);
 
-  db.run(`INSERT INTO applications (id, firstname, lastname, email, documents)
-          VALUES (?, ?, ?, ?, ?)`, [id, firstname, lastname, email, documents], function(err) {
-    if (err) {
-      console.error("DB insert error:", err);
-      return res.status(500).json({ success: false, error: `Database error: ${err.message}` });
+  db.run(`
+    INSERT INTO applications (id, firstname, lastname, email, documents)
+    VALUES (?, ?, ?, ?, ?)`,
+    [id, firstname, lastname, email, documentsJSON],
+    function(err) {
+      if (err) {
+        console.error('DB insert error:', err);
+        return res.status(500).json({ success: false, error: `Database error: ${err.message}` });
+      }
+      // Return valid JSON
+      res.json({
+        success: true,
+        message: 'Application submitted successfully. Your reference ID is: ' + id
+      });
     }
-    res.json({ success: true, message: "Application submitted successfully. Your reference ID is: " + id });
-  });
+  );
 });
 
-// Admin Panel Routes
-app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin/dashboard.html'));
-
-// Admin Login
+// Admin login route
 app.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
-    if (err) return res.redirect('/admin/login.html?error=DbError');
-    if (!row || !bcrypt.compareSync(password, row.password)) {
+    if (err) {
+      console.error('Admin login error:', err);
+      return res.redirect('/admin/login.html?error=DbError');
+    }
+    if (!row) {
+      return res.redirect('/admin/login.html?error=NoUser');
+    }
+    const match = bcrypt.compareSync(password, row.password);
+    if (!match) {
       return res.redirect('/admin/login.html?error=BadCreds');
     }
     req.session.admin = username;
@@ -101,50 +125,81 @@ app.post('/admin/login', (req, res) => {
   });
 });
 
-// Logout
+// Admin logout
 app.get('/admin/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/');
 });
 
-// Fetch Applications for Admin Panel
-app.get('/admin/api/applications', (req, res) => {
-  const { status, sortBy } = req.query;
-  let query = "SELECT * FROM applications";
+// Protect admin routes
+function adminAuth(req, res, next) {
+  if (req.session && req.session.admin) {
+    return next();
+  }
+  return res.redirect('/admin/login.html');
+}
+
+// GET applications with optional status, sort
+app.get('/admin/api/applications', adminAuth, (req, res) => {
+  let { status, sortBy } = req.query;
+  let sql = "SELECT * FROM applications";
   const params = [];
 
-  if (status) {
-    query += " WHERE status = ?";
+  if (status && (status === 'pending' || status === 'accepted' || status === 'rejected')) {
+    sql += " WHERE status = ?";
     params.push(status);
   }
-  if (sortBy === 'created_atAsc') query += " ORDER BY created_at ASC";
-  else query += " ORDER BY created_at DESC";
+  if (sortBy === 'created_atAsc') {
+    sql += " ORDER BY created_at ASC";
+  } else {
+    // default or 'created_atDesc'
+    sql += " ORDER BY created_at DESC";
+  }
 
-  db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: `Database error: ${err.message}` });
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('Fetch apps error:', err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
     res.json(rows);
   });
 });
 
-// Update Application Status
-app.post('/admin/api/application/:id/status', (req, res) => {
+// Update application status
+app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const { status } = req.body;
   const id = req.params.id;
 
+  if (!['pending','accepted','rejected'].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
   db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err) {
-    if (err) return res.status(500).json({ error: `Database error: ${err.message}` });
+    if (err) {
+      console.error("Update status error:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
     res.json({ message: "Status updated successfully." });
   });
 });
 
-// Delete Application
-app.delete('/admin/api/application/:id', (req, res) => {
+// Delete application
+app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   const id = req.params.id;
   db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
-    if (err) return res.status(500).json({ error: `Database error: ${err.message}` });
+    if (err) {
+      console.error("Delete app error:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
     res.json({ message: "Application deleted successfully." });
   });
 });
 
-// Start Server
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// No mail config references => ignoring any leftover mail_config table
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
