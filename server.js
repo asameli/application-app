@@ -35,7 +35,7 @@ const upload = multer({ dest: 'uploads/' });
 
 // Setup SQLite database
 const db = new sqlite3.Database('./applications.db', (err) => {
-  if (err) console.error(err.message);
+  if (err) console.error("DB connection error:", err);
   else console.log('Connected to SQLite database.');
 });
 
@@ -49,7 +49,11 @@ db.serialize(() => {
     documents TEXT,
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+  )`, (err) => {
+    if (err) {
+      console.error("DB table creation error:", err);
+    }
+  });
 });
 
 // Load email templates from a JSON file or use defaults
@@ -92,14 +96,15 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   const documentsJSON = JSON.stringify(documentPaths);
 
   db.run(
-    `INSERT INTO applications (id, firstname, lastname, email, documents) VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO applications (id, firstname, lastname, email, documents)
+     VALUES (?, ?, ?, ?, ?)`,
     [id, firstname, lastname, email, documentsJSON],
     function(err) {
       if (err) {
-        console.error(err);
-        return res.status(500).send("Database error.");
+        console.error("DB insert error:", err);
+        return res.status(500).send(`Database error: ${err.message}`);
       }
-      // Send automated thank you email
+      // Send automated thank-you email
       const emailText = emailTemplates.thankYou
         .replace('{{firstname}}', firstname)
         .replace('{{id}}', id);
@@ -140,14 +145,14 @@ function adminAuth(req, res, next) {
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   db.all("SELECT * FROM applications ORDER BY created_at DESC", [], (err, rows) => {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
+      console.error("DB fetch error (list apps):", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     res.json(rows);
   });
 });
 
-// API: Update application status (accepted or rejected) and send corresponding email
+// API: Update application status (accepted or rejected)
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -155,18 +160,24 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
     return res.status(400).json({ error: "Invalid status" });
   }
   db.get("SELECT * FROM applications WHERE id = ?", [id], (err, row) => {
-    if (err || !row) {
-      console.error(err);
-      return res.status(500).json({ error: "Application not found" });
+    if (err) {
+      console.error("DB fetch error (status update):", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
     }
-    db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err) {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Database error" });
+    if (!row) {
+      console.error("No application found for ID:", id);
+      return res.status(404).json({ error: "Application not found" });
+    }
+    db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err2) {
+      if (err2) {
+        console.error("DB update error (status):", err2);
+        return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
       // Send acceptance or rejection email using the updated template
       let template = status === 'accepted' ? emailTemplates.accepted : emailTemplates.rejected;
-      let emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
+      let emailText = template
+        .replace('{{firstname}}', row.firstname)
+        .replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
     });
@@ -178,8 +189,8 @@ app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   const id = req.params.id;
   db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
+      console.error("DB delete error:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     if (this.changes === 0) {
       return res.status(404).json({ error: "Application not found" });
@@ -192,8 +203,8 @@ app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
 app.get('/admin/api/count', adminAuth, (req, res) => {
   db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
+      console.error("DB count error:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     res.json(row);
   });
