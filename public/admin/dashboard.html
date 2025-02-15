@@ -12,8 +12,11 @@
 <body class="admin-body">
   <header class="header-bar">
     <div class="logo">surwave</div>
-    <h1 class="fancy-title">Admin Dashboard</h1>
+    <nav class="top-nav">
+      <ul id="navLinks"></ul>
+    </nav>
   </header>
+
   <div class="container fancy-card">
     <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
     <table class="apps-table" id="applicationsTable">
@@ -46,9 +49,34 @@
 
       <button type="submit">Update Templates</button>
     </form>
-    <a class="logout-link" href="/admin/logout">Logout</a>
   </div>
+
+  <footer class="footer">
+    <span>Version 1.0.2</span>
+  </footer>
+
   <script>
+    // Build a top nav dynamically, similar to index.html
+    fetch('/admin/api/status')
+      .then(r => r.json())
+      .then(data => {
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '';
+        if (data.loggedIn) {
+          navLinks.innerHTML += '<li><a href=\"/\">Application</a></li>';
+          navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
+          navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
+        } else {
+          // If user isn't admin, redirect or show login
+          navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
+        }
+      })
+      .catch(() => {
+        // fallback
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
+      });
+
     // Fetch and display applications
     function fetchApplications() {
       fetch('/admin/api/applications')
@@ -110,7 +138,7 @@
       })
       .then(response => response.json())
       .then(data => {
-        alert(data.message);
+        alert(data.message || data.error);
         fetchApplications();
         fetchCount();
       });

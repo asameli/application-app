@@ -1,4 +1,3 @@
-<!-- Updated version with a simple surwave logo and modern styling -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,8 +12,11 @@
 <body>
   <header class="header-bar">
     <div class="logo">surwave</div>
-    <h1 class="fancy-title">Apply for an Apartment</h1>
+    <nav class="top-nav">
+      <ul id="navLinks"></ul>
+    </nav>
   </header>
+
   <div class="container fancy-card">
     <form id="applicationForm" action="/" method="POST" enctype="multipart/form-data">
       <label for="firstname">First Name:</label>
@@ -33,8 +35,33 @@
     </form>
     <div id="response" style="margin-top:1rem; font-weight:500;"></div>
     <button id="toggleDarkMode">Toggle Dark Mode</button>
-    <p class="admin-link"><a href="/admin/login.html">Go to Admin Panel</a></p>
   </div>
+
+  <footer class="footer">
+    <span>Version 1.0.2</span>
+  </footer>
+
   <script src="main.js"></script>
+  <script>
+    // Check if admin is logged in
+    fetch('/admin/api/status')
+      .then(r => r.json())
+      .then(data => {
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '';
+        if (data.loggedIn) {
+          navLinks.innerHTML += '<li><a href=\"/\">Application</a></li>';
+          navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
+          navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
+        } else {
+          navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
+        }
+      })
+      .catch(() => {
+        // If the status route fails, just show a login link
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '<li><a href=\"/admin/login.html\">Login</a></li>';
+      });
+  </script>
 </body>
 </html>

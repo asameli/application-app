@@ -140,6 +140,14 @@ function adminAuth(req, res, next) {
   return res.redirect('/admin/login.html');
 }
 
+// API: Return if admin is logged in
+app.get('/admin/api/status', (req, res) => {
+  if (req.session && req.session.admin) {
+    return res.json({ loggedIn: true });
+  }
+  return res.json({ loggedIn: false });
+});
+
 // API: Retrieve all applications for the admin dashboard
 // Show newest first
 app.get('/admin/api/applications', adminAuth, (req, res) => {
@@ -152,7 +160,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   });
 });
 
-// API: Update application status (accepted or rejected)
+// API: Update application status (accepted or rejected) and send corresponding email
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
