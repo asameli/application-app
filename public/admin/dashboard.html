@@ -51,7 +51,9 @@
           <th>Actions</th>
         </tr>
       </thead>
-      <tbody></tbody>
+      <tbody>
+        <!-- Apps here -->
+      </tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
 
@@ -69,6 +71,7 @@
       <button type="submit">Update Templates</button>
     </form>
 
+<<<<<<< HEAD
     <h2 class="section-title">SMTP Mail Configuration</h2>
     <form id="mailConfigForm">
       <label for="mailHost">SMTP Host:</label>
@@ -93,6 +96,28 @@
 
   <footer class="footer">
     <span>Version 1.2.0</span>
+=======
+    <h2 class="section-title">Email Logs</h2>
+    <table class="apps-table" id="emailLogsTable">
+      <thead>
+        <tr>
+          <th>To</th>
+          <th>Subject</th>
+          <th>Message</th>
+          <th>Success?</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Email logs here -->
+      </tbody>
+    </table>
+    <div id="emptyEmailLogs" class="empty-message" style="display:none;">No email logs found.</div>
+  </div>
+
+  <footer class="footer">
+    <span>Version 1.1.0</span>
+>>>>>>> parent of c77fda9 (Number of updates)
   </footer>
 
   <script>
@@ -177,6 +202,16 @@
         .catch(err => console.error('fetchCount error:', err));
     }
 
+    function fetchTemplates() {
+      fetch('/admin/api/templates')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
+        });
+    }
+
     function updateStatus(id, status) {
       fetch(`/admin/api/application/${id}/status`, {
         method: 'POST',
@@ -230,6 +265,7 @@
       .catch(err => console.error('update templates error:', err));
     });
 
+<<<<<<< HEAD
     // Mail config (from mailConfig.json)
     function initMailConfig() {
       fetch('/admin/api/mail-config')
@@ -266,6 +302,38 @@
     fetchApplications();
     initTemplates();
     initMailConfig();
+=======
+    function fetchEmailLogs() {
+      fetch('/admin/api/email-logs')
+        .then(r => r.json())
+        .then(data => {
+          const tableBody = document.querySelector('#emailLogsTable tbody');
+          const emptyEmailLogs = document.getElementById('emptyEmailLogs');
+          tableBody.innerHTML = '';
+          if (data.length === 0) {
+            emptyEmailLogs.style.display = 'block';
+          } else {
+            emptyEmailLogs.style.display = 'none';
+            data.forEach(log => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${log.to_email}</td>
+                <td>${log.subject}</td>
+                <td><pre style=\"white-space:pre-wrap;\">${log.message}</pre></td>
+                <td>${log.success ? 'Yes' : 'No'} ${log.error_message ? '('+log.error_message+')' : ''}</td>
+                <td>${log.created_at}</td>
+              `;
+              tableBody.appendChild(row);
+            });
+          }
+        });
+    }
+
+    // Initial loads
+    fetchApplications();
+    fetchTemplates();
+    fetchEmailLogs();
+>>>>>>> parent of c77fda9 (Number of updates)
   </script>
 </body>
 </html>

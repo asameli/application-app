@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 /* v1.1.2 */
+=======
+/* v1.1.0 */
+
+/* Shared & Body */
+>>>>>>> parent of c77fda9 (Number of updates)
 body {
     font-family: 'Inter', sans-serif;
     margin: 0;
@@ -53,6 +59,11 @@ body {
     border-radius: 12px;
   }
   
+  .fancy-title {
+    font-size: 1.8rem;
+    margin: 0;
+  }
+  
   form {
     display: flex;
     flex-direction: column;
@@ -82,6 +93,15 @@ body {
     background-color: #45a049;
   }
   
+<<<<<<< HEAD
+=======
+  .admin-link {
+    margin-top: 1em;
+    text-align: right;
+  }
+  
+  /* Dark mode toggle */
+>>>>>>> parent of c77fda9 (Number of updates)
   body.dark {
     background-color: #121212;
     color: #e0e0e0;
@@ -91,6 +111,10 @@ body {
     color: #fff;
   }
   
+<<<<<<< HEAD
+=======
+  /* Admin body background */
+>>>>>>> parent of c77fda9 (Number of updates)
   .admin-body {
     background-color: #f5f5f5;
     min-height: 100vh;
@@ -99,6 +123,11 @@ body {
     font-weight: 600;
     margin-bottom: 1rem;
   }
+<<<<<<< HEAD
+=======
+  
+  /* Table */
+>>>>>>> parent of c77fda9 (Number of updates)
   .apps-table {
     width: 100%;
     border-collapse: collapse;
@@ -114,16 +143,20 @@ body {
     text-align: left;
     vertical-align: top;
   }
+  
   .empty-message {
     text-align: center;
     font-style: italic;
     margin-bottom: 1.5rem;
   }
+  
   .actions-cell {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
   }
+  
+  /* Buttons */
   .status-btn {
     padding: 0.4rem 0.8rem;
     border: none;
@@ -152,6 +185,20 @@ body {
   .delete-btn:hover {
     background-color: #5a6268;
   }
+<<<<<<< HEAD
+=======
+  
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 1rem;
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+  }
+  
+  /* Doc link styling */
+>>>>>>> parent of c77fda9 (Number of updates)
   .doc-link a {
     display: inline-block;
     margin-right: 0.5rem;
@@ -163,6 +210,7 @@ body {
   .doc-link a:hover {
     text-decoration: underline;
   }
+<<<<<<< HEAD
   .footer {
     text-align: center;
     margin-top: 1rem;
@@ -170,6 +218,10 @@ body {
     font-size: 0.9rem;
     color: #666;
   }
+=======
+  
+  /* Overlay changes */
+>>>>>>> parent of c77fda9 (Number of updates)
   #successOverlay {
     display: none; 
     position: fixed; 
