@@ -9,6 +9,7 @@ body {
   .header-bar {
     display: flex;
     align-items: center;
+    justify-content: space-between; /* push nav to the right */
     background-color: #ffffff;
     padding: 1rem;
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
@@ -21,8 +22,26 @@ body {
     margin-right: 1rem;
   }
   
+  .top-nav ul {
+    display: flex;
+    gap: 1rem;
+    list-style: none; /* remove bullet points */
+    margin: 0;
+    padding: 0;
+  }
+  
+  .top-nav li a {
+    text-decoration: none;
+    color: #333;
+    font-weight: 600;
+  }
+  
+  .top-nav li a:hover {
+    color: #666;
+  }
+  
   .container {
-    max-width: 800px;
+    max-width: 1000px; /* wider for better scaling */
     margin: 2em auto;
     padding: 1em;
     background: #ffffff;
@@ -43,6 +62,7 @@ body {
   form {
     display: flex;
     flex-direction: column;
+    width: 100%;
   }
   
   label {
@@ -100,6 +120,7 @@ body {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 1.5rem;
+    table-layout: auto; /* more responsive */
   }
   
   .apps-table thead {
@@ -110,6 +131,7 @@ body {
     padding: 0.75rem;
     border: 1px solid #ccc;
     text-align: left;
+    vertical-align: top;
   }
   
   .empty-message {
@@ -121,6 +143,7 @@ body {
   .actions-cell {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap; /* wrap on smaller screens */
   }
   
   .status-btn {
@@ -170,5 +193,28 @@ body {
     margin-top: 2rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
+  }
+  
+  /* Document links styling */
+  .doc-link a {
+    display: inline-block;
+    margin-right: 0.5rem;
+    color: #007bff;
+    text-decoration: none;
+    font-size: 0.9rem;
+    word-break: break-all; /* avoid overflow for long file names */
+  }
+  
+  .doc-link a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 1rem;
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: #666;
   }
   

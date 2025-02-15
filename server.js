@@ -30,6 +30,9 @@ app.use(session({
 // Serve static files (including index.html) from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve the uploads folder so documents can be downloaded
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Configure Multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
@@ -67,7 +70,7 @@ if (fs.existsSync(templatesFile)) {
   emailTemplates = JSON.parse(fs.readFileSync(templatesFile));
 }
 
-// Function to send email using Plesk's internal mailer
+// Function to send email using Plesk's internal mailer (requires mailutils/postfix/etc.)
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" ${to}`;
   exec(mailCommand, (error, stdout, stderr) => {
@@ -148,8 +151,7 @@ app.get('/admin/api/status', (req, res) => {
   return res.json({ loggedIn: false });
 });
 
-// API: Retrieve all applications for the admin dashboard
-// Show newest first
+// API: Retrieve all applications for the admin dashboard (newest first)
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   db.all("SELECT * FROM applications ORDER BY created_at DESC", [], (err, rows) => {
     if (err) {
@@ -160,7 +162,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   });
 });
 
-// API: Update application status (accepted or rejected) and send corresponding email
+// API: Update application status (accepted or rejected)
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -233,15 +235,3 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-
-app.get('/test-permission', (req, res) => {
-    fs.writeFile('uploads/test.txt', 'Hello from Node', (err) => {
-      if (err) {
-        console.error('Write test error:', err);
-        return res.status(500).send(`Write failed: ${err.message}`);
-      }
-      res.send('Write succeeded!');
-    });
-  });
-  

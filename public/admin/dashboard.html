@@ -27,6 +27,7 @@
           <th>Email</th>
           <th>Status</th>
           <th>Submitted At</th>
+          <th>Documents</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -67,7 +68,7 @@
           navLinks.innerHTML += '<li><a href=\"/admin/dashboard.html\">Admin Panel</a></li>';
           navLinks.innerHTML += '<li><a href=\"/admin/logout\">Logout</a></li>';
         } else {
-          // If user isn't admin, redirect or show login
+          // If user isn't admin, show login
           navLinks.innerHTML += '<li><a href=\"/admin/login.html\">Login</a></li>';
         }
       })
@@ -97,16 +98,41 @@
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td class="actions-cell">
-                  <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
-                  <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
-                  <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
+                <td class=\"doc-link\">${renderDocuments(app.documents)}</td>
+                <td class=\"actions-cell\">
+                  <button class=\"status-btn accept-btn\" onclick=\"updateStatus('${app.id}', 'accepted')\">Accept</button>
+                  <button class=\"status-btn reject-btn\" onclick=\"updateStatus('${app.id}', 'rejected')\">Reject</button>
+                  <button class=\"delete-btn\" onclick=\"deleteApplication('${app.id}')\">Delete</button>
                 </td>
               `;
               tableBody.appendChild(row);
             });
           }
         });
+    }
+
+    // Renders clickable download links for each document
+    function renderDocuments(documentsJSON) {
+      if (!documentsJSON) return '';
+      let docs;
+      try {
+        docs = JSON.parse(documentsJSON);
+      } catch (e) {
+        return ''; // or 'Invalid docs'
+      }
+      if (!Array.isArray(docs) || docs.length === 0) return 'No files';
+      // For each doc path, create a link. We assume /uploads is served statically
+      return docs.map(docPath => {
+        const filename = docPath.split('/').pop();
+        // docPath might be absolute. If so, we convert to relative if needed
+        // In your server.js, we do app.use('/uploads', express.static('uploads'));
+        // so the doc path must be /uploads/filename
+        const shortPath = docPath.startsWith('uploads/')
+          ? `/${docPath}`
+          : docPath.replace(/^.*uploads\//, '/uploads/');
+
+        return `<a href=\"${shortPath}\" download=\"${filename}\">${filename}</a>`;
+      }).join('<br>');
     }
 
     // Fetch application count
