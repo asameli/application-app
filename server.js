@@ -198,3 +198,12 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// TEST - DELETE
+app.get('/testWrite', (req, res) => {
+    fs.writeFile('uploads/test.txt', 'Hello', (err) => {
+      if (err) return res.status(500).send('Write failed: ' + err.message);
+      return res.send('Write succeeded!');
+    });
+  });
+  
