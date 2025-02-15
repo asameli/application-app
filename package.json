@@ -1,0 +1,2 @@
+cd /var/www/vhosts/surwave.ch/flat.surwave.ch
+npm init -y
