@@ -1,3 +1,9 @@
+
+---
+
+# 3) **deploy.sh** (v1.6.0)
+
+```bash
 #!/bin/bash
 # deploy.sh: Script to set up the database and necessary directories
 

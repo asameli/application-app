@@ -1,4 +1,4 @@
-// server.js (v1.5.0)
+// server.js (v1.6.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -17,6 +17,13 @@ function sanitizeInput(str) {
     .replace(/[<>'"]/g, '') // remove special chars
     .trim();
 }
+
+// Use absolute paths to avoid confusion with working directories
+const DB_PATH = path.join(__dirname, 'applications.db');
+const TEMPLATES_PATH = path.join(__dirname, 'emailTemplates.json');
+
+console.log(`Using database at: ${DB_PATH}`);
+console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,7 +58,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Database setup
-const db = new sqlite3.Database('./applications.db', (err) => {
+const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) console.error("DB connection error:", err);
   else console.log('Connected to SQLite database.');
 });
@@ -92,14 +99,22 @@ db.serialize(() => {
 });
 
 // Load email templates
-const templatesFile = path.join(__dirname, 'emailTemplates.json');
 let emailTemplates = {
   thankYou: "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
   accepted: "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.",
   rejected: "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected."
 };
-if (fs.existsSync(templatesFile)) {
-  emailTemplates = JSON.parse(fs.readFileSync(templatesFile));
+
+if (fs.existsSync(TEMPLATES_PATH)) {
+  try {
+    const data = fs.readFileSync(TEMPLATES_PATH);
+    emailTemplates = JSON.parse(data);
+    console.log("Loaded templates from file.");
+  } catch (err) {
+    console.error("Error reading emailTemplates.json:", err);
+  }
+} else {
+  console.log("No emailTemplates.json found; using defaults in memory.");
 }
 
 function logEmail(toEmail, subject, message, success, errorMsg) {
@@ -313,7 +328,7 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// *** Re-added GET/POST routes for email templates ***
+// *** GET/POST routes for email templates ***
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   res.json(emailTemplates);
 });
@@ -321,11 +336,16 @@ app.get('/admin/api/templates', adminAuth, (req, res) => {
 app.post('/admin/api/templates', adminAuth, (req, res) => {
   emailTemplates = req.body;
   // Save to file so that changes persist
-  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
-  res.json({ message: "Templates updated" });
+  try {
+    fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(emailTemplates, null, 2));
+    res.json({ message: "Templates updated" });
+  } catch (err) {
+    console.error("Error writing templates file:", err);
+    return res.status(500).json({ error: "Could not write email templates file." });
+  }
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.5.0 running on port ${PORT}`);
+  console.log(`Server v1.6.0 running on port ${PORT}`);
 });

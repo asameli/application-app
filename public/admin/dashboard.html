@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Admin Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body class="admin-body">
@@ -73,7 +70,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.5.0</span>
+    <span>Version 1.6.0</span>
   </footer>
 
   <script>
@@ -167,4 +164,53 @@
         });
     }
 
-    // *** Added form submiss
+    document.getElementById('templatesForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const body = {
+        thankYou: document.getElementById('thankYou').value,
+        accepted: document.getElementById('accepted').value,
+        rejected: document.getElementById('rejected').value
+      };
+      fetch('/admin/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message || data.error);
+      })
+      .catch(err => {
+        alert('Error updating templates: ' + err.message);
+      });
+    });
+
+    function updateStatus(id, status) {
+      fetch(`/admin/api/application/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message || data.error);
+        fetchApplications();
+      });
+    }
+
+    function deleteApplication(id) {
+      if (!confirm('Delete this application?')) return;
+      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          alert(data.message || data.error);
+          fetchApplications();
+        });
+    }
+
+    // Initial loads
+    fetchApplications();
+    fetchTemplates();
+  </script>
+</body>
+</html>
