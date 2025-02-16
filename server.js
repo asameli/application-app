@@ -1,4 +1,4 @@
-// server.js (v1.6.0)
+// server.js (v1.7.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -109,7 +109,7 @@ if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH);
     emailTemplates = JSON.parse(data);
-    console.log("Loaded templates from file.");
+    console.log("Loaded templates from file:", emailTemplates);
   } catch (err) {
     console.error("Error reading emailTemplates.json:", err);
   }
@@ -328,8 +328,9 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// *** GET/POST routes for email templates ***
+// GET/POST routes for email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
+  console.log("Returning templates to admin:", emailTemplates); // Debug log
   res.json(emailTemplates);
 });
 
@@ -338,6 +339,7 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   // Save to file so that changes persist
   try {
     fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(emailTemplates, null, 2));
+    console.log("Templates updated to:", emailTemplates);
     res.json({ message: "Templates updated" });
   } catch (err) {
     console.error("Error writing templates file:", err);
@@ -347,5 +349,5 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.6.0 running on port ${PORT}`);
+  console.log(`Server v1.7.0 running on port ${PORT}`);
 });
