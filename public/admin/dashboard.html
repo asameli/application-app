@@ -73,10 +73,11 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.3.0</span>
+    <span>Version 1.4.0</span>
   </footer>
 
   <script>
+    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
