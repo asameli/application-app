@@ -1,4 +1,4 @@
-# Apartment Application Mailbox (v1.3.0)
+# Apartment Application Mailbox (v1.4.0)
 
 A Node.js/Express application for managing apartment applications. This system provides:
 - A public frontend where applicants can fill in their information and upload documents.

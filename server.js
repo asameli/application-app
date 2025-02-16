@@ -1,4 +1,4 @@
-// server.js (v1.3.0)
+// server.js (v1.4.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -112,9 +112,9 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
 
 // Use system mail command with a fixed sender address
 function sendMail(to, subject, message) {
-  // -r sets the sender address
-  const mailCommand = `echo "${message}" | mail -r "mail@flat.surwave.ch" -s "${subject}" ${to}`;
-  exec(mailCommand, (error) => {
+  // Try using the -a option for the From header
+  const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
+  exec(mailCommand, (error, stdout, stderr) => {
     if (error) {
       console.error(`Error sending email: ${error.message}`);
       logEmail(to, subject, message, false, error.message);
@@ -168,7 +168,7 @@ app.post('/', upload.array('documents', 10), (req, res) => {
     sendMail(email, 'Application Received', emailText);
 
     // Return JSON success
-    res.json({
+    return res.json({
       success: true,
       message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
     });
@@ -275,10 +275,10 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      let template = (status === 'accepted')
+      const template = (status === 'accepted')
         ? emailTemplates.accepted
         : emailTemplates.rejected;
-      let emailText = template
+      const emailText = template
         .replace('{{firstname}}', row.firstname)
         .replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
@@ -313,9 +313,7 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// (Leaving email_logs routes in place if needed in the future, but no longer displayed in the UI.)
-
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.3.0 running on port ${PORT}`);
+  console.log(`Server v1.4.0 running on port ${PORT}`);
 });
