@@ -73,7 +73,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.4.0</span>
+    <span>Version 1.5.0</span>
   </footer>
 
   <script>
@@ -167,32 +167,4 @@
         });
     }
 
-    function updateStatus(id, status) {
-      fetch(`/admin/api/application/${id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      })
-      .then(r => r.json())
-      .then(data => {
-        alert(data.message || data.error);
-        fetchApplications();
-      });
-    }
-
-    function deleteApplication(id) {
-      if (!confirm('Delete this application?')) return;
-      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
-        .then(r => r.json())
-        .then(data => {
-          alert(data.message || data.error);
-          fetchApplications();
-        });
-    }
-
-    // Initial loads
-    fetchApplications();
-    fetchTemplates();
-  </script>
-</body>
-</html>
+    // *** Added form submiss

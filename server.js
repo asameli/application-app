@@ -1,4 +1,4 @@
-// server.js (v1.4.0)
+// server.js (v1.5.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -112,7 +112,7 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
 
 // Use system mail command with a fixed sender address
 function sendMail(to, subject, message) {
-  // Try using the -a option for the From header
+  // Using -a "From: ..." to set the sender address
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error, stdout, stderr) => {
     if (error) {
@@ -313,7 +313,19 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
+// *** Re-added GET/POST routes for email templates ***
+app.get('/admin/api/templates', adminAuth, (req, res) => {
+  res.json(emailTemplates);
+});
+
+app.post('/admin/api/templates', adminAuth, (req, res) => {
+  emailTemplates = req.body;
+  // Save to file so that changes persist
+  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
+  res.json({ message: "Templates updated" });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.4.0 running on port ${PORT}`);
+  console.log(`Server v1.5.0 running on port ${PORT}`);
 });
