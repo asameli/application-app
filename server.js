@@ -1,4 +1,4 @@
-// server.js (v1.7.0)
+// server.js (v1.7.1)
 
 const express = require('express');
 const session = require('express-session');
@@ -107,7 +107,8 @@ let emailTemplates = {
 
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
-    const data = fs.readFileSync(TEMPLATES_PATH);
+    // Specify 'utf8' encoding to correctly read the file as a string
+    const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
     emailTemplates = JSON.parse(data);
     console.log("Loaded templates from file:", emailTemplates);
   } catch (err) {
@@ -169,11 +170,7 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   function(err) {
     if (err) {
       console.error("DB insert error:", err);
-      // Return JSON to avoid parse error on client
-      return res.status(500).json({
-        success: false,
-        message: `Database error: ${err.message}`
-      });
+      return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
 
     // Send email
@@ -234,7 +231,7 @@ app.get('/admin/api/status', (req, res) => {
 
 // Filter & Sort Applications
 app.get('/admin/api/applications', adminAuth, (req, res) => {
-  const { status, sortBy } = req.query; // e.g. status=accepted/pending/rejected, sortBy=created_atAsc, etc.
+  const { status, sortBy } = req.query;
   let baseQuery = "SELECT * FROM applications";
   const conditions = [];
   const params = [];
@@ -254,16 +251,13 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   } else if (sortBy === 'created_atDesc') {
     baseQuery += " ORDER BY created_at DESC";
   } else {
-    // default: newest first
     baseQuery += " ORDER BY created_at DESC";
   }
 
   db.all(baseQuery, params, (err, rows) => {
     if (err) {
       console.error("DB fetch error (list apps):", err);
-      return res.status(500).json({
-        error: `Database error: ${err.message}`
-      });
+      return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     res.json(rows);
   });
@@ -290,9 +284,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      const template = (status === 'accepted')
-        ? emailTemplates.accepted
-        : emailTemplates.rejected;
+      const template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
       const emailText = template
         .replace('{{firstname}}', row.firstname)
         .replace('{{id}}', id);
@@ -330,13 +322,12 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
 
 // GET/POST routes for email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
-  console.log("Returning templates to admin:", emailTemplates); // Debug log
+  console.log("Returning templates to admin:", emailTemplates);
   res.json(emailTemplates);
 });
 
 app.post('/admin/api/templates', adminAuth, (req, res) => {
   emailTemplates = req.body;
-  // Save to file so that changes persist
   try {
     fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(emailTemplates, null, 2));
     console.log("Templates updated to:", emailTemplates);
