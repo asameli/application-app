@@ -1,4 +1,4 @@
-// server.js (v1.10.0)
+// server.js (v1.10.1)
 
 const express = require('express');
 const session = require('express-session');
@@ -79,6 +79,7 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS email_logs (
     id TEXT PRIMARY KEY,
     to_email TEXT,
@@ -88,6 +89,7 @@ db.serialize(() => {
     error_message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS admins (
     username TEXT PRIMARY KEY,
     password TEXT
@@ -101,6 +103,14 @@ db.serialize(() => {
       }
     });
   });
+
+  // New table for logging login attempts
+  db.run(`CREATE TABLE IF NOT EXISTS login_logs (
+    id TEXT PRIMARY KEY,
+    username TEXT,
+    success INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 });
 
 // Load email templates
@@ -174,7 +184,10 @@ app.post('/', upload.array('documents', 10), (req, res) => {
     }
     const emailText = emailTemplates.thankYou.replace('{{firstname}}', firstname).replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
-    return res.json({ success: true, message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}` });
+    return res.json({
+      success: true,
+      message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
+    });
   });
 });
 
@@ -182,18 +195,37 @@ app.post('/', upload.array('documents', 10), (req, res) => {
 app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
+
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
     if (err) {
       console.error("Admin login db error:", err);
+
+      // Log the failed attempt
+      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
+        [uuid.v4(), username, 0]);
+
       return res.redirect('/admin/login.html?error=DbError');
     }
     if (!row) {
+      // Log the failed attempt
+      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
+        [uuid.v4(), username, 0]);
+
       return res.redirect('/admin/login.html?error=NoUser');
     }
     const match = bcrypt.compareSync(password, row.password);
     if (!match) {
+      // Log the failed attempt
+      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
+        [uuid.v4(), username, 0]);
+
       return res.redirect('/admin/login.html?error=BadPass');
     }
+
+    // Log success
+    db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
+      [uuid.v4(), username, 1]);
+
     req.session.admin = username;
     res.redirect('/admin/dashboard.html');
   });
@@ -314,17 +346,13 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   }
 });
 
-// *** New route to change admin password ***
+// *** New route to change admin password (from v1.10.0) ***
 app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: "Missing oldPassword or newPassword" });
   }
-
-  // The current admin user is in the session
   const adminUser = req.session.admin;
-
-  // Fetch the admin row
   db.get("SELECT * FROM admins WHERE username = ?", [adminUser], (err, row) => {
     if (err) {
       console.error("Error fetching admin for password change:", err);
@@ -333,17 +361,11 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
     if (!row) {
       return res.status(404).json({ error: "Admin user not found" });
     }
-
-    // Check old password
     const match = bcrypt.compareSync(oldPassword, row.password);
     if (!match) {
       return res.status(400).json({ error: "Old password is incorrect" });
     }
-
-    // Hash the new password
     const hashedNew = bcrypt.hashSync(newPassword, 10);
-
-    // Update in DB
     db.run("UPDATE admins SET password = ? WHERE username = ?", [hashedNew, adminUser], function(err2) {
       if (err2) {
         console.error("Error updating admin password:", err2);
@@ -354,7 +376,18 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
+// *** Route to fetch failed logins (success=0) ***
+app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
+  db.all("SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC", [], (err, rows) => {
+    if (err) {
+      console.error("DB fetch error (failed logins):", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    res.json(rows);
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.0 running on port ${PORT}`);
+  console.log(`Server v1.10.1 running on port ${PORT}`);
 });
