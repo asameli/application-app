@@ -67,6 +67,7 @@
 
       <button type="submit">Update Templates</button>
     </form>
+<<<<<<< HEAD
 
     <h2 class="section-title">Change Admin Password</h2>
     <form id="changePassForm">
@@ -98,9 +99,16 @@
 
   <footer class="footer">
     <span>Version 1.10.1</span>
+=======
+  </div>
+
+  <footer class="footer">
+    <span>Version 1.6.0</span>
+>>>>>>> parent of 8450950 (v1.10.0)
   </footer>
 
   <script>
+    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -184,9 +192,9 @@
       fetch('/admin/api/templates')
         .then(r => r.json())
         .then(data => {
-          document.getElementById('thankYou').value = data.thankYou || '';
-          document.getElementById('accepted').value = data.accepted || '';
-          document.getElementById('rejected').value = data.rejected || '';
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
         });
     }
 
@@ -203,7 +211,12 @@
         body: JSON.stringify(body)
       })
       .then(r => r.json())
-      .then(data => alert(data.message || data.error));
+      .then(data => {
+        alert(data.message || data.error);
+      })
+      .catch(err => {
+        alert('Error updating templates: ' + err.message);
+      });
     });
 
     function updateStatus(id, status) {
@@ -229,6 +242,7 @@
         });
     }
 
+<<<<<<< HEAD
     // Change Password form
     document.getElementById('changePassForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -289,6 +303,11 @@
       fetchFailedLogins();
     }
     init();
+=======
+    // Initial loads
+    fetchApplications();
+    fetchTemplates();
+>>>>>>> parent of 8450950 (v1.10.0)
   </script>
 </body>
 </html>
