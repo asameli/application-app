@@ -1,4 +1,4 @@
-// server.js (v1.7.1)
+// server.js (v1.9.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -41,8 +41,13 @@ app.use(session({
 
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve uploads so docs can be downloaded
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// SECURITY FIX: Serve uploads only for authenticated admin users
+function adminAuth(req, res, next) {
+  if (req.session && req.session.admin) return next();
+  return res.status(403).send('Access denied');
+}
+app.use('/uploads', adminAuth, express.static(path.join(__dirname, 'uploads')));
 
 // Configure Multer: store original filename
 const storage = multer.diskStorage({
@@ -107,7 +112,6 @@ let emailTemplates = {
 
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
-    // Specify 'utf8' encoding to correctly read the file as a string
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
     emailTemplates = JSON.parse(data);
     console.log("Loaded templates from file:", emailTemplates);
@@ -128,7 +132,6 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
 
 // Use system mail command with a fixed sender address
 function sendMail(to, subject, message) {
-  // Using -a "From: ..." to set the sender address
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error, stdout, stderr) => {
     if (error) {
@@ -155,7 +158,6 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   const email = sanitizeInput(req.body.email);
 
   const id = uuid.v4();
-  // Store doc paths along with original filenames
   const docs = req.files.map(file => ({
     path: `uploads/${file.filename}`,
     original: file.originalname
@@ -165,25 +167,14 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   db.run(`
     INSERT INTO applications (id, firstname, lastname, email, documents)
     VALUES (?, ?, ?, ?, ?)
-  `,
-  [id, firstname, lastname, email, documentsJSON],
-  function(err) {
+  `, [id, firstname, lastname, email, documentsJSON], function(err) {
     if (err) {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-
-    // Send email
-    const emailText = emailTemplates.thankYou
-      .replace('{{firstname}}', firstname)
-      .replace('{{id}}', id);
+    const emailText = emailTemplates.thankYou.replace('{{firstname}}', firstname).replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
-
-    // Return JSON success
-    return res.json({
-      success: true,
-      message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
-    });
+    return res.json({ success: true, message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}` });
   });
 });
 
@@ -191,7 +182,6 @@ app.post('/', upload.array('documents', 10), (req, res) => {
 app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
-
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
     if (err) {
       console.error("Admin login db error:", err);
@@ -215,11 +205,7 @@ app.get('/admin/logout', (req, res) => {
   res.redirect('/admin/login.html');
 });
 
-// Middleware for admin routes
-function adminAuth(req, res, next) {
-  if (req.session && req.session.admin) return next();
-  return res.redirect('/admin/login.html');
-}
+// Middleware for admin routes (already defined above as adminAuth)
 
 // Check if admin is logged in
 app.get('/admin/api/status', (req, res) => {
@@ -235,8 +221,6 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   let baseQuery = "SELECT * FROM applications";
   const conditions = [];
   const params = [];
-
-  // Filter by status
   if (status && ['pending','accepted','rejected'].includes(status)) {
     conditions.push("status = ?");
     params.push(status);
@@ -244,8 +228,6 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   if (conditions.length > 0) {
     baseQuery += " WHERE " + conditions.join(" AND ");
   }
-
-  // Sorting
   if (sortBy === 'created_atAsc') {
     baseQuery += " ORDER BY created_at ASC";
   } else if (sortBy === 'created_atDesc') {
@@ -253,7 +235,6 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   } else {
     baseQuery += " ORDER BY created_at DESC";
   }
-
   db.all(baseQuery, params, (err, rows) => {
     if (err) {
       console.error("DB fetch error (list apps):", err);
@@ -285,9 +266,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
       const template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
-      const emailText = template
-        .replace('{{firstname}}', row.firstname)
-        .replace('{{id}}', id);
+      const emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
     });
