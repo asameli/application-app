@@ -1,4 +1,4 @@
-// server.js (v1.9.0)
+// server.js (v1.10.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -205,9 +205,7 @@ app.get('/admin/logout', (req, res) => {
   res.redirect('/admin/login.html');
 });
 
-// Middleware for admin routes (already defined above as adminAuth)
-
-// Check if admin is logged in
+// Check if admin is logged in (used in front-end)
 app.get('/admin/api/status', (req, res) => {
   if (req.session && req.session.admin) {
     return res.json({ loggedIn: true });
@@ -299,12 +297,11 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// GET/POST routes for email templates
+// Email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   console.log("Returning templates to admin:", emailTemplates);
   res.json(emailTemplates);
 });
-
 app.post('/admin/api/templates', adminAuth, (req, res) => {
   emailTemplates = req.body;
   try {
@@ -317,7 +314,47 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   }
 });
 
+// *** New route to change admin password ***
+app.post('/admin/api/change-password', adminAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: "Missing oldPassword or newPassword" });
+  }
+
+  // The current admin user is in the session
+  const adminUser = req.session.admin;
+
+  // Fetch the admin row
+  db.get("SELECT * FROM admins WHERE username = ?", [adminUser], (err, row) => {
+    if (err) {
+      console.error("Error fetching admin for password change:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    if (!row) {
+      return res.status(404).json({ error: "Admin user not found" });
+    }
+
+    // Check old password
+    const match = bcrypt.compareSync(oldPassword, row.password);
+    if (!match) {
+      return res.status(400).json({ error: "Old password is incorrect" });
+    }
+
+    // Hash the new password
+    const hashedNew = bcrypt.hashSync(newPassword, 10);
+
+    // Update in DB
+    db.run("UPDATE admins SET password = ? WHERE username = ?", [hashedNew, adminUser], function(err2) {
+      if (err2) {
+        console.error("Error updating admin password:", err2);
+        return res.status(500).json({ error: `Database error: ${err2.message}` });
+      }
+      res.json({ message: "Password changed successfully" });
+    });
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.7.0 running on port ${PORT}`);
+  console.log(`Server v1.10.0 running on port ${PORT}`);
 });

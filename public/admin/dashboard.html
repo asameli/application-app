@@ -67,14 +67,24 @@
 
       <button type="submit">Update Templates</button>
     </form>
+
+    <h2 class="section-title">Change Admin Password</h2>
+    <form id="changePassForm">
+      <label for="oldPassword">Old Password:</label>
+      <input type="password" id="oldPassword" name="oldPassword" required />
+
+      <label for="newPassword">New Password:</label>
+      <input type="password" id="newPassword" name="newPassword" required />
+
+      <button type="submit">Change Password</button>
+    </form>
   </div>
 
   <footer class="footer">
-    <span>Version 1.6.0</span>
+    <span>Version 1.10.0</span>
   </footer>
 
   <script>
-    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -158,9 +168,9 @@
       fetch('/admin/api/templates')
         .then(r => r.json())
         .then(data => {
-          document.getElementById('thankYou').value = data.thankYou;
-          document.getElementById('accepted').value = data.accepted;
-          document.getElementById('rejected').value = data.rejected;
+          document.getElementById('thankYou').value = data.thankYou || '';
+          document.getElementById('accepted').value = data.accepted || '';
+          document.getElementById('rejected').value = data.rejected || '';
         });
     }
 
@@ -177,12 +187,7 @@
         body: JSON.stringify(body)
       })
       .then(r => r.json())
-      .then(data => {
-        alert(data.message || data.error);
-      })
-      .catch(err => {
-        alert('Error updating templates: ' + err.message);
-      });
+      .then(data => alert(data.message || data.error));
     });
 
     function updateStatus(id, status) {
@@ -207,6 +212,32 @@
           fetchApplications();
         });
     }
+
+    // *** Change Password form
+    document.getElementById('changePassForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const oldPassword = document.getElementById('oldPassword').value.trim();
+      const newPassword = document.getElementById('newPassword').value.trim();
+      if (!oldPassword || !newPassword) {
+        alert("Please fill out both fields.");
+        return;
+      }
+      fetch('/admin/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword, newPassword })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+        } else {
+          alert(data.message);
+          document.getElementById('changePassForm').reset();
+        }
+      })
+      .catch(err => alert('Error changing password: ' + err.message));
+    });
 
     // Initial loads
     fetchApplications();
