@@ -67,44 +67,10 @@
 
       <button type="submit">Update Templates</button>
     </form>
-<<<<<<< HEAD
-
-    <h2 class="section-title">Change Admin Password</h2>
-    <form id="changePassForm">
-      <label for="oldPassword">Old Password:</label>
-      <input type="password" id="oldPassword" name="oldPassword" required />
-
-      <label for="newPassword">New Password:</label>
-      <input type="password" id="newPassword" name="newPassword" required />
-
-      <button type="submit">Change Password</button>
-    </form>
-
-    <!-- New: Failed Login Attempts Section -->
-    <h2 class="section-title">Failed Login Attempts</h2>
-    <table class="apps-table" id="failedLoginsTable">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Username</th>
-          <th>Created At</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Fails here -->
-      </tbody>
-    </table>
-    <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
-  </div>
-
-  <footer class="footer">
-    <span>Version 1.10.1</span>
-=======
   </div>
 
   <footer class="footer">
     <span>Version 1.6.0</span>
->>>>>>> parent of 8450950 (v1.10.0)
   </footer>
 
   <script>
@@ -242,72 +208,9 @@
         });
     }
 
-<<<<<<< HEAD
-    // Change Password form
-    document.getElementById('changePassForm').addEventListener('submit', e => {
-      e.preventDefault();
-      const oldPassword = document.getElementById('oldPassword').value.trim();
-      const newPassword = document.getElementById('newPassword').value.trim();
-      if (!oldPassword || !newPassword) {
-        alert("Please fill out both fields.");
-        return;
-      }
-      fetch('/admin/api/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPassword, newPassword })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) {
-          alert(data.error);
-        } else {
-          alert(data.message);
-          document.getElementById('changePassForm').reset();
-        }
-      })
-      .catch(err => alert('Error changing password: ' + err.message));
-    });
-
-    // *** Fetch failed login attempts
-    function fetchFailedLogins() {
-      fetch('/admin/api/failed-logins')
-        .then(r => r.json())
-        .then(data => {
-          const tableBody = document.querySelector('#failedLoginsTable tbody');
-          const noFailsMessage = document.getElementById('noFailsMessage');
-          tableBody.innerHTML = '';
-          if (!data || data.length === 0) {
-            noFailsMessage.style.display = 'block';
-          } else {
-            noFailsMessage.style.display = 'none';
-            data.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${item.id}</td>
-                <td>${item.username}</td>
-                <td>${item.created_at}</td>
-              `;
-              tableBody.appendChild(row);
-            });
-          }
-        })
-        .catch(err => {
-          alert('Error fetching failed logins: ' + err.message);
-        });
-    }
-
-    function init() {
-      fetchApplications();
-      fetchTemplates();
-      fetchFailedLogins();
-    }
-    init();
-=======
     // Initial loads
     fetchApplications();
     fetchTemplates();
->>>>>>> parent of 8450950 (v1.10.0)
   </script>
 </body>
 </html>
