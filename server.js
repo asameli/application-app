@@ -1,4 +1,4 @@
-// server.js (v1.10.4)
+// server.js (v1.10.5)
 
 const express = require('express');
 const session = require('express-session');
@@ -26,7 +26,8 @@ console.log(`Using database at: ${DB_PATH}`);
 console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
-// *** If behind a proxy (Plesk, etc.), trust it so that secure cookies and sessions work
+
+// If you're behind Plesk or another proxy, trust it so that secure cookies & session IP checks work
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
@@ -35,24 +36,28 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// *** Session for admin auth
+/*
+  Since you're on HTTPS, we set:
+  - secure: true    => cookie only sent over HTTPS
+  - sameSite: 'none' => cross-site cookies are allowed (often needed behind certain proxies)
+*/
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // set to 'true' if your site is HTTPS
+    secure: true,      // <-- IMPORTANT for HTTPS
     httpOnly: true,
-    sameSite: 'lax' // or 'strict' if you prefer
+    sameSite: 'none'   // cross-site usage allowed
   }
 }));
 
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// *** adminAuth: Return JSON on failure, log session for debugging
+// adminAuth: Return JSON if unauthorized; log session for debugging
 function adminAuth(req, res, next) {
-  console.log('adminAuth check: session =', req.session);
+  console.log('adminAuth check => session:', req.session);
   if (req.session && req.session.admin) {
     return next();
   }
@@ -107,7 +112,6 @@ db.serialize(() => {
     username TEXT PRIMARY KEY,
     password TEXT
   )`, () => {
-    // Insert default admin if not exist
     db.get("SELECT * FROM admins WHERE username = ?", ['admin'], (err2, row) => {
       if (!row) {
         const hashed = bcrypt.hashSync('adminpass', 10);
@@ -126,7 +130,7 @@ db.serialize(() => {
   )`);
 });
 
-// Load email templates (v1.10.2 defaults)
+// Default email templates
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
 
@@ -241,7 +245,6 @@ app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
 
-  // Grab IP
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
@@ -269,8 +272,11 @@ app.post('/admin/login', (req, res) => {
 
     // *** Set the session admin
     req.session.admin = username;
-    console.log('Admin login success, session=', req.session);
-    res.redirect('/admin/dashboard.html');
+    req.session.save(err2 => {
+      if (err2) console.error('Session save error:', err2);
+      console.log('Admin login success, session=', req.session);
+      res.redirect('/admin/dashboard.html');
+    });
   });
 });
 
@@ -280,9 +286,9 @@ app.get('/admin/logout', (req, res) => {
   res.redirect('/admin/login.html');
 });
 
-// Check if admin is logged in (used in front-end)
+// Check if admin is logged in
 app.get('/admin/api/status', (req, res) => {
-  console.log('/admin/api/status: session=', req.session);
+  console.log('/admin/api/status => session:', req.session);
   if (req.session && req.session.admin) {
     return res.json({ loggedIn: true });
   }
@@ -466,5 +472,5 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.4 running on port ${PORT}`);
+  console.log(`Server v1.10.5 running on port ${PORT}`);
 });
