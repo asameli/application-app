@@ -79,13 +79,17 @@
       <button type="submit">Change Password</button>
     </form>
 
-    <!-- New: Failed Login Attempts Section -->
+    <!-- Updated: Failed Login Attempts with pagination & flush button -->
     <h2 class="section-title">Failed Login Attempts</h2>
+    <div style="margin-bottom:1rem;">
+      <button onclick="flushFailedLogins()">Flush All Failed Logins</button>
+    </div>
     <table class="apps-table" id="failedLoginsTable">
       <thead>
         <tr>
           <th>ID</th>
           <th>Username</th>
+          <th>IP</th>
           <th>Created At</th>
         </tr>
       </thead>
@@ -94,10 +98,11 @@
       </tbody>
     </table>
     <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
+    <div id="failsPagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.10.1</span>
+    <span>Version 1.10.2</span>
   </footer>
 
   <script>
@@ -255,31 +260,66 @@
       .catch(err => alert('Error changing password: ' + err.message));
     });
 
-    // *** Fetch failed login attempts
-    function fetchFailedLogins() {
-      fetch('/admin/api/failed-logins')
+    // *** Pagination + fetch for failed login attempts
+    let currentFailsPage = 1;
+    function fetchFailedLogins(page = 1) {
+      currentFailsPage = page;
+      fetch(`/admin/api/failed-logins?page=${page}`)
         .then(r => r.json())
         .then(data => {
+          const { failedLogins, total, page, pages } = data;
           const tableBody = document.querySelector('#failedLoginsTable tbody');
           const noFailsMessage = document.getElementById('noFailsMessage');
+          const failsPagination = document.getElementById('failsPagination');
           tableBody.innerHTML = '';
-          if (!data || data.length === 0) {
+          failsPagination.innerHTML = '';
+
+          if (!failedLogins || failedLogins.length === 0) {
             noFailsMessage.style.display = 'block';
           } else {
             noFailsMessage.style.display = 'none';
-            data.forEach(item => {
+            failedLogins.forEach(item => {
               const row = document.createElement('tr');
               row.innerHTML = `
                 <td>${item.id}</td>
                 <td>${item.username}</td>
+                <td>${item.ip || ''}</td>
                 <td>${item.created_at}</td>
               `;
               tableBody.appendChild(row);
             });
           }
+
+          // Build pagination
+          for (let p = 1; p <= pages; p++) {
+            const btn = document.createElement('button');
+            btn.textContent = p;
+            btn.style.margin = '0 4px';
+            if (p === page) {
+              btn.disabled = true;
+            }
+            btn.addEventListener('click', () => {
+              fetchFailedLogins(p);
+            });
+            failsPagination.appendChild(btn);
+          }
         })
         .catch(err => {
           alert('Error fetching failed logins: ' + err.message);
+        });
+    }
+
+    // Flush button
+    function flushFailedLogins() {
+      if (!confirm('Are you sure you want to delete all failed login attempts?')) return;
+      fetch('/admin/api/failed-logins', { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          alert(data.message || data.error);
+          fetchFailedLogins(1);
+        })
+        .catch(err => {
+          alert('Error flushing failed logins: ' + err.message);
         });
     }
 

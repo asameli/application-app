@@ -1,4 +1,4 @@
-// server.js (v1.10.1)
+// server.js (v1.10.2)
 
 const express = require('express');
 const session = require('express-session');
@@ -104,26 +104,50 @@ db.serialize(() => {
     });
   });
 
-  // New table for logging login attempts
+  // Table for logging login attempts, now with IP
   db.run(`CREATE TABLE IF NOT EXISTS login_logs (
     id TEXT PRIMARY KEY,
     username TEXT,
     success INTEGER,
+    ip TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
 
-// Load email templates
+// Load email templates with new default text blocks
 let emailTemplates = {
-  thankYou: "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
-  accepted: "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.",
-  rejected: "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected."
+  thankYou: `Dear {{firstname}},
+
+Thank you for submitting your application. Your reference ID is {{id}}.
+We will contact you as soon as possible regarding the next steps.
+
+Best Regards
+`,
+  accepted: `Dear {{firstname}},
+
+Congratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.
+We will contact you to obtain further information about your application.
+
+Many thanks.
+Best Regards
+`,
+  rejected: `Dear {{firstname}},
+
+We regret to inform you that your application (ID: {{id}}) has been rejected.
+We would like to thank you for your efforts and your interest in the apartment and wish you all the best.
+
+Best Regards
+`
 };
 
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
-    emailTemplates = JSON.parse(data);
+    const fromFile = JSON.parse(data);
+    // Overwrite only if they exist in the file
+    if (fromFile.thankYou) emailTemplates.thankYou = fromFile.thankYou;
+    if (fromFile.accepted) emailTemplates.accepted = fromFile.accepted;
+    if (fromFile.rejected) emailTemplates.rejected = fromFile.rejected;
     console.log("Loaded templates from file:", emailTemplates);
   } catch (err) {
     console.error("Error reading emailTemplates.json:", err);
@@ -182,8 +206,18 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-    const emailText = emailTemplates.thankYou.replace('{{firstname}}', firstname).replace('{{id}}', id);
+    // Send email to the applicant
+    const emailText = emailTemplates.thankYou
+      .replace('{{firstname}}', firstname)
+      .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
+
+    // Also send an email to "wohnung@surwave.ch"
+    const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}). 
+Email: ${email}.
+Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
+    sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
+
     return res.json({
       success: true,
       message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
@@ -196,35 +230,37 @@ app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
 
+  // Grab IP
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
     if (err) {
       console.error("Admin login db error:", err);
-
-      // Log the failed attempt
-      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
-        [uuid.v4(), username, 0]);
+      // Log the failed attempt with IP
+      db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
+        [uuid.v4(), username, 0, ip]);
 
       return res.redirect('/admin/login.html?error=DbError');
     }
     if (!row) {
       // Log the failed attempt
-      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
-        [uuid.v4(), username, 0]);
+      db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
+        [uuid.v4(), username, 0, ip]);
 
       return res.redirect('/admin/login.html?error=NoUser');
     }
     const match = bcrypt.compareSync(password, row.password);
     if (!match) {
       // Log the failed attempt
-      db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
-        [uuid.v4(), username, 0]);
+      db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
+        [uuid.v4(), username, 0, ip]);
 
       return res.redirect('/admin/login.html?error=BadPass');
     }
 
     // Log success
-    db.run("INSERT INTO login_logs (id, username, success) VALUES (?, ?, ?)",
-      [uuid.v4(), username, 1]);
+    db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
+      [uuid.v4(), username, 1, ip]);
 
     req.session.admin = username;
     res.redirect('/admin/dashboard.html');
@@ -251,6 +287,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   let baseQuery = "SELECT * FROM applications";
   const conditions = [];
   const params = [];
+
   if (status && ['pending','accepted','rejected'].includes(status)) {
     conditions.push("status = ?");
     params.push(status);
@@ -295,8 +332,10 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      const template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
-      const emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
+      let template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
+      let emailText = template
+        .replace('{{firstname}}', row.firstname)
+        .replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
     });
@@ -346,7 +385,7 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   }
 });
 
-// *** New route to change admin password (from v1.10.0) ***
+// Change admin password
 app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
@@ -376,18 +415,50 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// *** Route to fetch failed logins (success=0) ***
+// *** Route to fetch failed logins with pagination
+// e.g. /admin/api/failed-logins?page=1
 app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
-  db.all("SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC", [], (err, rows) => {
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = 10; // last 10 entries per page
+  const offset = (page - 1) * limit;
+
+  db.all(
+    "SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+    [limit, offset],
+    (err, rows) => {
+      if (err) {
+        console.error("DB fetch error (failed logins):", err);
+        return res.status(500).json({ error: `Database error: ${err.message}` });
+      }
+      // Also get total count
+      db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0", (err2, row) => {
+        if (err2) {
+          console.error("DB count error (failed logins):", err2);
+          return res.status(500).json({ error: `Database error: ${err2.message}` });
+        }
+        res.json({
+          failedLogins: rows,
+          total: row.total,
+          page,
+          pages: Math.ceil(row.total / limit)
+        });
+      });
+    }
+  );
+});
+
+// *** Route to flush all failed logins
+app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
+  db.run("DELETE FROM login_logs WHERE success=0", function(err) {
     if (err) {
-      console.error("DB fetch error (failed logins):", err);
+      console.error("Error flushing failed logins:", err);
       return res.status(500).json({ error: `Database error: ${err.message}` });
     }
-    res.json(rows);
+    res.json({ message: "All failed login attempts have been deleted." });
   });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.1 running on port ${PORT}`);
+  console.log(`Server v1.10.2 running on port ${PORT}`);
 });
