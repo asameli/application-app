@@ -1,4 +1,4 @@
-// server.js (v1.10.6)
+// server.js (v1.10.8)
 
 const express = require('express');
 const session = require('express-session');
@@ -18,7 +18,6 @@ function sanitizeInput(str) {
     .trim();
 }
 
-// Use absolute paths to avoid confusion with working directories
 const DB_PATH = path.join(__dirname, 'applications.db');
 const TEMPLATES_PATH = path.join(__dirname, 'emailTemplates.json');
 
@@ -27,7 +26,7 @@ console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
 
-// If behind Plesk or another proxy, trust it so secure cookies & sessions work
+// If behind Plesk or another reverse proxy, trust it so that x-forwarded-proto is respected
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
@@ -37,12 +36,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 /*
-  Session config for HTTPS behind a proxy:
-  - cookie.domain: ".surwave.ch" so subdomains (flat.surwave.ch) share cookies
-  - secure: true => only send over HTTPS
+  Session config for a reverse-proxied HTTPS environment:
+  - No cookie.domain => let Express set it automatically to the host
+  - secure: false => allow cookies even if Node sees HTTP (Plesk terminates SSL)
   - sameSite: 'none' => cross-site usage allowed
   - resave: true & rolling: true => refresh session cookie on each response
   - saveUninitialized: false => do not create empty sessions
+  *** This is less secure but often fixes “session not persisting” behind proxies.
 */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
@@ -50,18 +50,17 @@ app.use(session({
   rolling: true,
   saveUninitialized: false,
   cookie: {
-    domain: '.surwave.ch',   // Key for subdomain usage
-    secure: true,            // HTTPS only
+    secure: false,
     httpOnly: true,
-    sameSite: 'none',        // needed for cross-site usage
-    maxAge: 24 * 60 * 60 * 1000 // e.g. 24 hours
+    sameSite: 'none',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
 
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// adminAuth: return JSON if unauthorized; log session for debugging
+// Middleware to require admin session
 function adminAuth(req, res, next) {
   console.log('adminAuth => session:', req.session);
   if (req.session && req.session.admin) {
@@ -92,7 +91,6 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
   else console.log('Connected to SQLite database.');
 });
 
-// Create tables if not exist
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS applications (
     id TEXT PRIMARY KEY,
@@ -162,6 +160,7 @@ Best Regards
 `
 };
 
+// If emailTemplates.json exists, merge it in
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
@@ -185,7 +184,7 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
   `, [eid, toEmail, subject, message, success ? 1 : 0, errorMsg || null]);
 }
 
-// Use system mail command with a fixed sender address
+// Use system mail command
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error, stdout, stderr) => {
@@ -206,7 +205,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Post => form submission
+// Form submission
 app.post('/', upload.array('documents', 10), (req, res) => {
   const firstname = sanitizeInput(req.body.firstname);
   const lastname = sanitizeInput(req.body.lastname);
@@ -227,19 +226,18 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-    // Send email to the applicant
+
     const emailText = emailTemplates.thankYou
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
 
-    // Also send an email to "wohnung@surwave.ch"
     const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}). 
 Email: ${email}.
 Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
     sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
 
-    return res.json({
+    res.json({
       success: true,
       message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
     });
@@ -276,7 +274,6 @@ app.post('/admin/login', (req, res) => {
     db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
       [uuid.v4(), username, 1, ip]);
 
-    // *** Set the session admin
     req.session.admin = username;
     req.session.save(err2 => {
       if (err2) console.error('Session save error:', err2);
@@ -301,7 +298,7 @@ app.get('/admin/api/status', (req, res) => {
   return res.json({ loggedIn: false });
 });
 
-// Filter & Sort Applications
+// Applications listing
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   const { status, sortBy } = req.query;
   let baseQuery = "SELECT * FROM applications";
@@ -476,7 +473,6 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
   });
 });
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.6 running on port ${PORT}`);
+  console.log(`Server v1.10.8 running on port ${PORT}`);
 });
