@@ -1,4 +1,4 @@
-// server.js (v1.10.5)
+// server.js (v1.10.6)
 
 const express = require('express');
 const session = require('express-session');
@@ -27,7 +27,7 @@ console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
 
-// If you're behind Plesk or another proxy, trust it so that secure cookies & session IP checks work
+// If behind Plesk or another proxy, trust it so secure cookies & sessions work
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
@@ -37,27 +37,33 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 /*
-  Since you're on HTTPS, we set:
-  - secure: true    => cookie only sent over HTTPS
-  - sameSite: 'none' => cross-site cookies are allowed (often needed behind certain proxies)
+  Session config for HTTPS behind a proxy:
+  - cookie.domain: ".surwave.ch" so subdomains (flat.surwave.ch) share cookies
+  - secure: true => only send over HTTPS
+  - sameSite: 'none' => cross-site usage allowed
+  - resave: true & rolling: true => refresh session cookie on each response
+  - saveUninitialized: false => do not create empty sessions
 */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
-  resave: false,
+  resave: true,
+  rolling: true,
   saveUninitialized: false,
   cookie: {
-    secure: true,      // <-- IMPORTANT for HTTPS
+    domain: '.surwave.ch',   // Key for subdomain usage
+    secure: true,            // HTTPS only
     httpOnly: true,
-    sameSite: 'none'   // cross-site usage allowed
+    sameSite: 'none',        // needed for cross-site usage
+    maxAge: 24 * 60 * 60 * 1000 // e.g. 24 hours
   }
 }));
 
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// adminAuth: Return JSON if unauthorized; log session for debugging
+// adminAuth: return JSON if unauthorized; log session for debugging
 function adminAuth(req, res, next) {
-  console.log('adminAuth check => session:', req.session);
+  console.log('adminAuth => session:', req.session);
   if (req.session && req.session.admin) {
     return next();
   }
@@ -472,5 +478,5 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.5 running on port ${PORT}`);
+  console.log(`Server v1.10.6 running on port ${PORT}`);
 });
