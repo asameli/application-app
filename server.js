@@ -1,4 +1,4 @@
-// server.js (v1.10.2)
+// server.js (v1.10.3)
 
 const express = require('express');
 const session = require('express-session');
@@ -42,11 +42,16 @@ app.use(session({
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// SECURITY FIX: Serve uploads only for authenticated admin users
+// SECURITY FIX: Return JSON if access is denied
 function adminAuth(req, res, next) {
-  if (req.session && req.session.admin) return next();
-  return res.status(403).send('Access denied');
+  if (req.session && req.session.admin) {
+    return next();
+  }
+  // Return JSON instead of plain text to avoid parse errors in the client
+  return res.status(403).json({ error: 'Access denied' });
 }
+
+// Serve uploads only for authenticated admin users
 app.use('/uploads', adminAuth, express.static(path.join(__dirname, 'uploads')));
 
 // Configure Multer: store original filename
@@ -104,7 +109,6 @@ db.serialize(() => {
     });
   });
 
-  // Table for logging login attempts, now with IP
   db.run(`CREATE TABLE IF NOT EXISTS login_logs (
     id TEXT PRIMARY KEY,
     username TEXT,
@@ -114,7 +118,7 @@ db.serialize(() => {
   )`);
 });
 
-// Load email templates with new default text blocks
+// Load email templates
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
 
@@ -415,11 +419,10 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// *** Route to fetch failed logins with pagination
-// e.g. /admin/api/failed-logins?page=1
+// Failed logins with pagination
 app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
-  const limit = 10; // last 10 entries per page
+  const limit = 10;
   const offset = (page - 1) * limit;
 
   db.all(
@@ -430,7 +433,6 @@ app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
         console.error("DB fetch error (failed logins):", err);
         return res.status(500).json({ error: `Database error: ${err.message}` });
       }
-      // Also get total count
       db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0", (err2, row) => {
         if (err2) {
           console.error("DB count error (failed logins):", err2);
@@ -447,7 +449,7 @@ app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
   );
 });
 
-// *** Route to flush all failed logins
+// Flush all failed logins
 app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
   db.run("DELETE FROM login_logs WHERE success=0", function(err) {
     if (err) {
@@ -460,5 +462,5 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.2 running on port ${PORT}`);
+  console.log(`Server v1.10.3 running on port ${PORT}`);
 });
