@@ -1,4 +1,4 @@
-/* v1.6.0 */
+/* v1.9.1 */
 
 /* Shared & Body */
 body {
@@ -99,8 +99,26 @@ body.dark {
   background-color: #121212;
   color: #e0e0e0;
 }
+/* Container in dark mode */
 .dark .container {
   background-color: #1e1e1e;
+  color: #fff;
+}
+/* Header bar in dark mode */
+.dark .header-bar {
+  background-color: #1e1e1e;
+  color: #fff;
+  box-shadow: none;
+}
+/* Logo in dark mode */
+.dark .logo {
+  color: #fff;
+}
+/* Nav links in dark mode */
+.dark .top-nav li a {
+  color: #e0e0e0;
+}
+.dark .top-nav li a:hover {
   color: #fff;
 }
 
@@ -125,7 +143,8 @@ body.dark {
 .apps-table thead {
   background-color: #eee;
 }
-.apps-table th, .apps-table td {
+.apps-table th,
+.apps-table td {
   padding: 0.75rem;
   border: 1px solid #ccc;
   text-align: left;
@@ -198,12 +217,12 @@ body.dark {
 
 /* Overlay changes */
 #successOverlay {
-  display: none; 
-  position: fixed; 
-  top: 0; 
-  left: 0; 
-  width: 100%; 
-  height: 100%; 
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background-color: rgba(0,0,0,0.6);
   align-items: center;
   justify-content: center;
