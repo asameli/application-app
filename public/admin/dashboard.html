@@ -67,14 +67,44 @@
 
       <button type="submit">Update Templates</button>
     </form>
+
+    <h2 class="section-title">Change Admin Password</h2>
+    <form id="changePassForm">
+      <label for="oldPassword">Old Password:</label>
+      <input type="password" id="oldPassword" name="oldPassword" required />
+
+      <label for="newPassword">New Password:</label>
+      <input type="password" id="newPassword" name="newPassword" required />
+
+      <button type="submit">Change Password</button>
+    </form>
+
+    <h2 class="section-title">Failed Login Attempts</h2>
+    <div style="margin-bottom:1rem;">
+      <button onclick="flushFailedLogins()">Flush All Failed Logins</button>
+    </div>
+    <table class="apps-table" id="failedLoginsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>IP</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Fails here -->
+      </tbody>
+    </table>
+    <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
+    <div id="failsPagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.6.0</span>
+    <span>Version 1.9.2</span>
   </footer>
 
   <script>
-    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -118,11 +148,11 @@
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td class="doc-link">${renderDocuments(app.documents)}</td>
-                <td class="actions-cell">
-                  <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
-                  <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
-                  <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
+                <td>${renderDocuments(app.documents)}</td>
+                <td>
+                  <button onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
+                  <button onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
+                  <button onclick="deleteApplication('${app.id}')">Delete</button>
                 </td>
               `;
               tableBody.appendChild(row);
@@ -140,10 +170,11 @@
       } catch(e) {
         return 'Invalid docs';
       }
-      if (!Array.isArray(docs) || docs.length === 0) return 'No files';
-      return docs.map(doc =>
-        `<a href="/${doc.path}" download="${doc.original}">${doc.original}</a>`
-      ).join('<br>');
+      if (!Array.isArray(docs) || docs.length===0) return 'No files';
+      return docs.map(d => {
+        const filename = d.path.split('/').pop();
+        return `<a href="/${d.path}" download="${filename}">${d.original}</a>`;
+      }).join('<br>');
     }
 
     function fetchCount() {
@@ -164,27 +195,6 @@
         });
     }
 
-    document.getElementById('templatesForm').addEventListener('submit', e => {
-      e.preventDefault();
-      const body = {
-        thankYou: document.getElementById('thankYou').value,
-        accepted: document.getElementById('accepted').value,
-        rejected: document.getElementById('rejected').value
-      };
-      fetch('/admin/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      .then(r => r.json())
-      .then(data => {
-        alert(data.message || data.error);
-      })
-      .catch(err => {
-        alert('Error updating templates: ' + err.message);
-      });
-    });
-
     function updateStatus(id, status) {
       fetch(`/admin/api/application/${id}/status`, {
         method: 'POST',
@@ -200,7 +210,7 @@
 
     function deleteApplication(id) {
       if (!confirm('Delete this application?')) return;
-      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
+      fetch(`/admin/api/application/${id}`, { method:'DELETE' })
         .then(r => r.json())
         .then(data => {
           alert(data.message || data.error);
@@ -208,9 +218,98 @@
         });
     }
 
-    // Initial loads
-    fetchApplications();
-    fetchTemplates();
+    document.getElementById('templatesForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const body = {
+        thankYou: document.getElementById('thankYou').value,
+        accepted: document.getElementById('accepted').value,
+        rejected: document.getElementById('rejected').value
+      };
+      fetch('/admin/api/templates', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(r => r.json())
+      .then(data => alert(data.message || data.error));
+    });
+
+    // Password change
+    document.getElementById('changePassForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const oldPassword = document.getElementById('oldPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      if (!oldPassword || !newPassword) {
+        alert("Please fill out both fields.");
+        return;
+      }
+      fetch('/admin/api/change-password', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ oldPassword, newPassword })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) alert(data.error);
+        else alert(data.message);
+        document.getElementById('changePassForm').reset();
+      });
+    });
+
+    // Failed logins
+    let currentFailsPage=1;
+    function fetchFailedLogins(page=1) {
+      currentFailsPage=page;
+      fetch(`/admin/api/failed-logins?page=${page}`)
+        .then(r=>r.json())
+        .then(data => {
+          const { failedLogins, total, page, pages } = data;
+          const tableBody = document.querySelector('#failedLoginsTable tbody');
+          const noFailsMessage = document.getElementById('noFailsMessage');
+          const failsPagination = document.getElementById('failsPagination');
+          tableBody.innerHTML='';
+          failsPagination.innerHTML='';
+
+          if(!failedLogins || failedLogins.length===0){
+            noFailsMessage.style.display='block';
+          } else {
+            noFailsMessage.style.display='none';
+            failedLogins.forEach(item=>{
+              const row = document.createElement('tr');
+              row.innerHTML=`
+                <td>${item.id}</td>
+                <td>${item.username}</td>
+                <td>${item.ip||''}</td>
+                <td>${item.created_at}</td>
+              `;
+              tableBody.appendChild(row);
+            });
+          }
+          for(let p=1;p<=pages;p++){
+            const btn=document.createElement('button');
+            btn.textContent=p;
+            if(p===page) btn.disabled=true;
+            btn.addEventListener('click', ()=>fetchFailedLogins(p));
+            failsPagination.appendChild(btn);
+          }
+        });
+    }
+    function flushFailedLogins() {
+      if(!confirm('Delete all failed login attempts?')) return;
+      fetch('/admin/api/failed-logins',{ method:'DELETE' })
+        .then(r=>r.json())
+        .then(data=>{
+          alert(data.message||data.error);
+          fetchFailedLogins(1);
+        });
+    }
+
+    function init() {
+      fetchApplications();
+      fetchTemplates();
+      fetchFailedLogins();
+    }
+    init();
   </script>
 </body>
 </html>

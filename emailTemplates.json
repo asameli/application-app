@@ -1,5 +1,5 @@
 {
-    "thankYou": "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
-    "accepted": "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.",
-    "rejected": "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected."
-  }
+  "thankYou": "Dear {{firstname}},\n\nThank you for submitting your application. Your reference ID is {{id}}.\nWe will contact you as soon as possible regarding the next steps.\n\nBest Regards\n",
+  "accepted": "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.\nWe will contact you to obtain further information about your application.\n\nMany thanks.\nBest Regards\n",
+  "rejected": "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected.\nWe would like to thank you for your efforts and your interest in the apartment and wish you all the best.\n\nBest Regards\n"
+}

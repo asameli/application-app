@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Apartment Application</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
-<!-- Default to dark mode by adding "dark" to the body class -->
-<body class="dark">
+<body>
   <header class="header-bar">
     <div class="logo">surwave</div>
     <nav class="top-nav">
@@ -26,46 +25,34 @@
 
     <form id="applicationForm" enctype="multipart/form-data">
       <label for="firstname">First Name:</label>
-      <input type="text" name="firstname" required />
+      <input type="text" name="firstname" required>
 
       <label for="lastname">Last Name:</label>
-      <input type="text" name="lastname" required />
+      <input type="text" name="lastname" required>
 
       <label for="email">Email Address:</label>
-      <input type="email" name="email" required />
+      <input type="email" name="email" required>
 
       <label for="documents">Upload Documents:</label>
-      <input type="file" name="documents" multiple required />
+      <input type="file" name="documents" multiple required>
 
       <button type="submit">Submit Application</button>
     </form>
     <div id="response"></div>
-
-    <button id="toggleDarkMode">Toggle Dark Mode</button>
-  </div>
-
-  <!-- A success overlay -->
-  <!-- Wrapped overlay content in a .overlay-content container so we can style it in dark mode -->
-  <div id="successOverlay" class="overlay-backdrop">
-    <div class="overlay-content">
-      <div style="font-size: 3rem; color: green;">&#10004;</div>
-      <h2 id="overlayMessage" style="margin-top: 0;">Application Submitted!</h2>
-      <button onclick="closeOverlay()" style="margin-top:1rem;">Close</button>
-    </div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.10.1</span>
+    <span>Version 1.9.2</span>
   </footer>
 
   <script src="main.js"></script>
   <script>
     // Check admin status
-    fetch("/admin/api/status")
-      .then((r) => r.json())
-      .then((data) => {
-        const navLinks = document.getElementById("navLinks");
-        navLinks.innerHTML = "";
+    fetch('/admin/api/status')
+      .then(r => r.json())
+      .then(data => {
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '';
         if (data.loggedIn) {
           navLinks.innerHTML += '<li><a href="/">Application</a></li>';
           navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
@@ -75,44 +62,38 @@
         }
       })
       .catch(() => {
-        const navLinks = document.getElementById("navLinks");
+        const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
-    const form = document.getElementById("applicationForm");
-    form.addEventListener("submit", async (e) => {
+    const form = document.getElementById('applicationForm');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(form);
-      const responseElem = document.getElementById("response");
-      responseElem.innerHTML = "Submitting...";
+      const responseElem = document.getElementById('response');
+      responseElem.textContent = 'Submitting...';
 
       try {
-        const resp = await fetch("/", {
-          method: "POST",
-          body: formData,
+        const resp = await fetch('/', {
+          method: 'POST',
+          body: formData
         });
         if (!resp.ok) {
           const text = await resp.text();
-          responseElem.innerHTML = text;
+          responseElem.textContent = text;
           return;
         }
         const data = await resp.json();
         if (data.success) {
-          document.getElementById("overlayMessage").innerText = data.message;
-          document.getElementById("successOverlay").style.display = "flex";
-          responseElem.innerHTML = "";
+          responseElem.textContent = data.message;
           form.reset();
         } else {
-          responseElem.innerHTML = data.message || "Error occurred";
+          responseElem.textContent = data.message || 'Error occurred';
         }
       } catch (err) {
-        responseElem.innerHTML = "An error occurred: " + err.message;
+        responseElem.textContent = 'An error occurred: ' + err.message;
       }
     });
-
-    function closeOverlay() {
-      document.getElementById("successOverlay").style.display = "none";
-    }
   </script>
 </body>
 </html>

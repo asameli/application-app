@@ -9,16 +9,9 @@
 <body class="admin-body">
   <header class="header-bar">
     <div class="logo">surwave</div>
-    <!-- Navigation bar with a link back to the main Application page -->
-    <nav class="top-nav">
-      <ul id="navLinks">
-        <li><a href="/">Application</a></li>
-      </ul>
-    </nav>
-  </header>
-  
-  <div class="container fancy-card">
     <h1 class="fancy-title">Admin Login</h1>
+  </header>
+  <div class="container fancy-card">
     <form action="/admin/login" method="POST">
       <label for="username">Username:</label>
       <input type="text" name="username" required>
@@ -28,9 +21,7 @@
 
       <button type="submit">Login</button>
     </form>
-    <div id="error" style="margin-top:1rem;">
-      <!-- Display errors if any, e.g. ?error=Invalid credentials -->
-    </div>
+    <div id="error" style="margin-top:1rem;"></div>
   </div>
 </body>
 </html>

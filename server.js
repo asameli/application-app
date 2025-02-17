@@ -1,4 +1,4 @@
-// server.js (v1.9.1) - Based on v1.9.0 plus new features
+// server.js (v1.9.2)
 
 const express = require('express');
 const session = require('express-session');
@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Simple session config (as in v1.9.0)
+// *** Session config from v1.9.0 (simple, "was working")
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
@@ -33,17 +33,17 @@ app.use(session({
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// *** Security fix from v1.9.0: Protect /uploads with admin auth
+// *** Security fix from v1.9.0: Protect /uploads
 function adminAuth(req, res, next) {
   if (req.session && req.session.admin) {
     return next();
   }
-  // Return plain text "Access denied" as in v1.9.0
+  // As in v1.9.0, we return plain text
   return res.status(403).send('Access denied');
 }
 app.use('/uploads', adminAuth, express.static(path.join(__dirname, 'uploads')));
 
-// Multer config: store original filename
+// Configure Multer: store original filename
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -56,7 +56,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Database setup
+// Database setup (same as v1.9.0)
 const db = new sqlite3.Database('./applications.db', (err) => {
   if (err) console.error("DB connection error:", err);
   else console.log('Connected to SQLite database.');
@@ -74,7 +74,7 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  // Email logs table
+  // Email logs
   db.run(`CREATE TABLE IF NOT EXISTS email_logs (
     id TEXT PRIMARY KEY,
     to_email TEXT,
@@ -97,7 +97,7 @@ db.serialize(() => {
       }
     });
   });
-  // *** New: login_logs table for IP-based logging
+  // *** New: login_logs for IP-based logging
   db.run(`CREATE TABLE IF NOT EXISTS login_logs (
     id TEXT PRIMARY KEY,
     username TEXT,
@@ -107,7 +107,7 @@ db.serialize(() => {
   )`);
 });
 
-// Updated email templates with your requested text blocks
+// *** Load updated email templates
 const templatesFile = path.join(__dirname, 'emailTemplates.json');
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
@@ -134,10 +134,15 @@ Best Regards
 `
 };
 if (fs.existsSync(templatesFile)) {
-  // If file exists, load from it
-  emailTemplates = JSON.parse(fs.readFileSync(templatesFile));
+  try {
+    const data = fs.readFileSync(templatesFile);
+    emailTemplates = JSON.parse(data);
+  } catch (err) {
+    console.error("Error reading emailTemplates.json:", err);
+  }
 }
 
+// Log emails to DB
 function logEmail(toEmail, subject, message, success, errorMsg) {
   const eid = uuid.v4();
   db.run(`
@@ -168,15 +173,13 @@ app.get('/', (req, res) => {
 });
 
 // Post => form submission
-// Additional feature: also send email to "wohnung@surwave.ch"
+// Extra: also sends email to "wohnung@surwave.ch"
 app.post('/', upload.array('documents', 10), (req, res) => {
   const firstname = sanitizeInput(req.body.firstname);
   const lastname = sanitizeInput(req.body.lastname);
   const email = sanitizeInput(req.body.email);
 
   const id = uuid.v4();
-  // store doc paths
-  const docPaths = req.files.map(file => `uploads/${file.filename}`);
   const docs = req.files.map(file => ({
     path: `uploads/${file.filename}`,
     original: file.originalname
@@ -191,13 +194,13 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-    // send "thank you" email
+    // "thank you" email
     const emailText = emailTemplates.thankYou
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
 
-    // *** Additional email to "wohnung@surwave.ch"
+    // Also notify "wohnung@surwave.ch"
     const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}).
 Email: ${email}.
 Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
@@ -211,7 +214,7 @@ Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
 });
 
 // Admin login
-// Additional feature: log IP & success/fail in login_logs
+// IP-based logging
 app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
@@ -220,7 +223,6 @@ app.post('/admin/login', (req, res) => {
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
     if (err) {
       console.error("Admin login db error:", err);
-      // Log failed
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
       return res.redirect('/admin/login.html?error=DbError');
@@ -236,7 +238,6 @@ app.post('/admin/login', (req, res) => {
         [uuid.v4(), username, 0, ip]);
       return res.redirect('/admin/login.html?error=BadPass');
     }
-
     // success
     db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
       [uuid.v4(), username, 1, ip]);
@@ -274,6 +275,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   if (conditions.length > 0) {
     baseQuery += " WHERE " + conditions.join(" AND ");
   }
+
   if (sortBy === 'created_atAsc') {
     baseQuery += " ORDER BY created_at ASC";
   } else if (sortBy === 'created_atDesc') {
@@ -295,7 +297,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
-  if (!['accepted', 'rejected'].includes(status)) {
+  if (!['accepted','rejected'].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
   db.get("SELECT * FROM applications WHERE id = ?", [id], (err, row) => {
@@ -312,7 +314,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      let template = status === 'accepted' ? emailTemplates.accepted : emailTemplates.rejected;
+      let template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
       let emailText = template
         .replace('{{firstname}}', row.firstname)
         .replace('{{id}}', id);
@@ -348,7 +350,7 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// *** Password change route
+// *** Admin Password Change
 app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
@@ -378,7 +380,7 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// *** Pagination for failed logins
+// *** Failed logins with pagination
 app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
   const limit = 10;
@@ -419,17 +421,7 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
   });
 });
 
-// Get/Update email templates
-app.get('/admin/api/templates', adminAuth, (req, res) => {
-  res.json(emailTemplates);
-});
-app.post('/admin/api/templates', adminAuth, (req, res) => {
-  emailTemplates = req.body;
-  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
-  res.json({ message: "Templates updated" });
-});
-
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.9.1 running on port ${PORT} (based on v1.9.0 + new features)`);
+  console.log(`Server v1.9.2 running on port ${PORT} (based on v1.9.0 + new features)`);
 });
