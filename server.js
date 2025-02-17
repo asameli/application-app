@@ -1,4 +1,4 @@
-// server.js (v1.10.3)
+// server.js (v1.10.4)
 
 const express = require('express');
 const session = require('express-session');
@@ -26,28 +26,36 @@ console.log(`Using database at: ${DB_PATH}`);
 console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
+// *** If behind a proxy (Plesk, etc.), trust it so that secure cookies and sessions work
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 
 // Parse URL-encoded and JSON bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Session for admin auth
+// *** Session for admin auth
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
   saveUninitialized: false,
+  cookie: {
+    secure: false, // set to 'true' if your site is HTTPS
+    httpOnly: true,
+    sameSite: 'lax' // or 'strict' if you prefer
+  }
 }));
 
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// SECURITY FIX: Return JSON if access is denied
+// *** adminAuth: Return JSON on failure, log session for debugging
 function adminAuth(req, res, next) {
+  console.log('adminAuth check: session =', req.session);
   if (req.session && req.session.admin) {
     return next();
   }
-  // Return JSON instead of plain text to avoid parse errors in the client
   return res.status(403).json({ error: 'Access denied' });
 }
 
@@ -118,7 +126,7 @@ db.serialize(() => {
   )`);
 });
 
-// Load email templates
+// Load email templates (v1.10.2 defaults)
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
 
@@ -148,7 +156,6 @@ if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
     const fromFile = JSON.parse(data);
-    // Overwrite only if they exist in the file
     if (fromFile.thankYou) emailTemplates.thankYou = fromFile.thankYou;
     if (fromFile.accepted) emailTemplates.accepted = fromFile.accepted;
     if (fromFile.rejected) emailTemplates.rejected = fromFile.rejected;
@@ -240,25 +247,19 @@ app.post('/admin/login', (req, res) => {
   db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
     if (err) {
       console.error("Admin login db error:", err);
-      // Log the failed attempt with IP
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
-
       return res.redirect('/admin/login.html?error=DbError');
     }
     if (!row) {
-      // Log the failed attempt
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
-
       return res.redirect('/admin/login.html?error=NoUser');
     }
     const match = bcrypt.compareSync(password, row.password);
     if (!match) {
-      // Log the failed attempt
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
-
       return res.redirect('/admin/login.html?error=BadPass');
     }
 
@@ -266,7 +267,9 @@ app.post('/admin/login', (req, res) => {
     db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
       [uuid.v4(), username, 1, ip]);
 
+    // *** Set the session admin
     req.session.admin = username;
+    console.log('Admin login success, session=', req.session);
     res.redirect('/admin/dashboard.html');
   });
 });
@@ -279,10 +282,11 @@ app.get('/admin/logout', (req, res) => {
 
 // Check if admin is logged in (used in front-end)
 app.get('/admin/api/status', (req, res) => {
+  console.log('/admin/api/status: session=', req.session);
   if (req.session && req.session.admin) {
     return res.json({ loggedIn: true });
   }
-  res.json({ loggedIn: false });
+  return res.json({ loggedIn: false });
 });
 
 // Filter & Sort Applications
@@ -462,5 +466,5 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.10.3 running on port ${PORT}`);
+  console.log(`Server v1.10.4 running on port ${PORT}`);
 });
