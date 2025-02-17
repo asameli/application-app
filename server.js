@@ -1,4 +1,4 @@
-// server.js (v1.10.8)
+// server.js (v1.10.9)
 
 const express = require('express');
 const session = require('express-session');
@@ -14,11 +14,20 @@ const bcrypt = require('bcryptjs');
 function sanitizeInput(str) {
   if (typeof str !== 'string') return '';
   return str
-    .replace(/[<>'"]/g, '') // remove special chars
+    .replace(/[<>'"]/g, '')
     .trim();
 }
 
-const DB_PATH = path.join(__dirname, 'applications.db');
+/*
+  Attempt a flexible DB path:
+  1) If process.env.DB_PATH is set, use that.
+  2) Otherwise default to path.join(__dirname, 'applications.db').
+
+  If your DB is in /var/www/vhosts/surwave.ch/flat.surwave.ch/applications.db,
+  set DB_PATH environment variable accordingly.
+*/
+const DEFAULT_DB_PATH = path.join(__dirname, 'applications.db');
+const DB_PATH = process.env.DB_PATH || DEFAULT_DB_PATH;
 const TEMPLATES_PATH = path.join(__dirname, 'emailTemplates.json');
 
 console.log(`Using database at: ${DB_PATH}`);
@@ -26,7 +35,7 @@ console.log(`Using templates file at: ${TEMPLATES_PATH}`);
 
 const app = express();
 
-// If behind Plesk or another reverse proxy, trust it so that x-forwarded-proto is respected
+// If behind Plesk or another proxy, trust it so that x-forwarded-for is respected
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
@@ -36,13 +45,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 /*
-  Session config for a reverse-proxied HTTPS environment:
-  - No cookie.domain => let Express set it automatically to the host
-  - secure: false => allow cookies even if Node sees HTTP (Plesk terminates SSL)
+  Session config (from v1.10.8) but we keep it as is.
+  - secure: false => allow cookies even if Node sees HTTP
   - sameSite: 'none' => cross-site usage allowed
-  - resave: true & rolling: true => refresh session cookie on each response
+  - rolling: true => refresh session cookie on each response
+  - resave: true => session is saved even if not modified
   - saveUninitialized: false => do not create empty sessions
-  *** This is less secure but often fixes “session not persisting” behind proxies.
 */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
@@ -50,7 +58,7 @@ app.use(session({
   rolling: true,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: false,    // allows session cookie even if Node sees HTTP
     httpOnly: true,
     sameSite: 'none',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
@@ -60,7 +68,7 @@ app.use(session({
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware to require admin session
+// adminAuth: return JSON if unauthorized; log session for debugging
 function adminAuth(req, res, next) {
   console.log('adminAuth => session:', req.session);
   if (req.session && req.session.admin) {
@@ -85,11 +93,34 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+/* 
+  Check if DB file exists and is readable/writable:
+  (In some setups, you may not have a pre-existing file, so this is optional.)
+*/
+if (!fs.existsSync(DB_PATH)) {
+  console.warn(`WARNING: Database file not found at ${DB_PATH}. If this is intentional, the DB will be created automatically.`);
+} else {
+  try {
+    fs.accessSync(DB_PATH, fs.constants.R_OK | fs.constants.W_OK);
+    console.log(`DB file is readable and writable: ${DB_PATH}`);
+  } catch (err) {
+    console.error(`DB file at ${DB_PATH} is not accessible:`, err);
+  }
+}
+
 // Database setup
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) console.error("DB connection error:", err);
-  else console.log('Connected to SQLite database.');
-});
+let db;
+try {
+  db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error("DB connection error:", err);
+    } else {
+      console.log('Connected to SQLite database.');
+    }
+  });
+} catch (ex) {
+  console.error("Exception while creating DB connection:", ex);
+}
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS applications (
@@ -134,6 +165,15 @@ db.serialize(() => {
   )`);
 });
 
+// **Test Query**: Attempt a simple read from the DB to confirm it's working
+db.get("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", (testErr, testRow) => {
+  if (testErr) {
+    console.error("DB test query error:", testErr);
+  } else {
+    console.log("DB test query success, first table name:", testRow ? testRow.name : "(none found)");
+  }
+});
+
 // Default email templates
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
@@ -160,7 +200,6 @@ Best Regards
 `
 };
 
-// If emailTemplates.json exists, merge it in
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
@@ -184,7 +223,6 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
   `, [eid, toEmail, subject, message, success ? 1 : 0, errorMsg || null]);
 }
 
-// Use system mail command
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error, stdout, stderr) => {
@@ -200,7 +238,6 @@ function sendMail(to, subject, message) {
 
 //--- ROUTES ---
 
-// Root => index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -226,18 +263,19 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-
+    // Send email to applicant
     const emailText = emailTemplates.thankYou
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
 
+    // Notify admin
     const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}). 
 Email: ${email}.
 Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
     sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
 
-    res.json({
+    return res.json({
       success: true,
       message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
     });
@@ -298,7 +336,7 @@ app.get('/admin/api/status', (req, res) => {
   return res.json({ loggedIn: false });
 });
 
-// Applications listing
+// GET /admin/api/applications
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   const { status, sortBy } = req.query;
   let baseQuery = "SELECT * FROM applications";
@@ -328,7 +366,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   });
 });
 
-// Update status
+// POST /admin/api/application/:id/status
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -359,7 +397,7 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   });
 });
 
-// Delete application
+// DELETE /admin/api/application/:id
 app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   const id = req.params.id;
   db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
@@ -374,7 +412,7 @@ app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
   });
 });
 
-// Count applications
+// GET /admin/api/count
 app.get('/admin/api/count', adminAuth, (req, res) => {
   db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
     if (err) {
@@ -385,7 +423,7 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// Email templates
+// GET/POST /admin/api/templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   console.log("Returning templates to admin:", emailTemplates);
   res.json(emailTemplates);
@@ -402,7 +440,7 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
   }
 });
 
-// Change admin password
+// POST /admin/api/change-password
 app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
@@ -432,7 +470,7 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// Failed logins with pagination
+// GET /admin/api/failed-logins
 app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
   const limit = 10;
@@ -462,7 +500,7 @@ app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
   );
 });
 
-// Flush all failed logins
+// DELETE /admin/api/failed-logins
 app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
   db.run("DELETE FROM login_logs WHERE success=0", function(err) {
     if (err) {
@@ -474,5 +512,5 @@ app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server v1.10.8 running on port ${PORT}`);
+  console.log(`Server v1.10.9 running on port ${PORT}`);
 });
