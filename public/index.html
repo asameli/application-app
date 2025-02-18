@@ -12,13 +12,12 @@
     <div class="logo">surwave</div>
     <nav class="top-nav">
       <ul id="navLinks">
-        <!-- We'll insert the dark-mode icon directly in the nav here -->
+        <!-- Dark mode toggle icon in the nav -->
         <li>
           <a href="#" id="darkModeToggle" title="Toggle Dark Mode">
-            <!-- Simple sun/moon SVG icon (from Feather icons) -->
             <svg id="darkModeIcon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-              <!-- We'll just pick a moon shape for demonstration -->
+              <!-- Example: a "moon" shape from Feather icons -->
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
             </svg>
           </a>
@@ -69,35 +68,36 @@
   </div>
 
   <footer class="footer">
-    <span>Version 2.2.1</span>
+    <span>Version 2.2.2</span>
   </footer>
 
-  <script src="main.js"></script>
+  <!-- Main JS with "defer" ensures DOM is ready before script runs -->
+  <script src="main.js" defer></script>
   <script>
-    // Check admin status
-    fetch("/admin/api/status")
-      .then((r) => r.json())
-      .then((data) => {
-        const navLinks = document.getElementById("navLinks");
-        // If user is admin, show admin links
-        if (data.loggedIn) {
-          navLinks.innerHTML += '<li><a href="/">Application</a></li>';
-          navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
-          navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
-        } else {
-          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
-        }
-      })
-      .catch(() => {
-        // If error, just show login link
-        const navLinks = document.getElementById("navLinks");
-        navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
-      });
-
     // Provide closeOverlay in global scope so the "Close" button works
     window.closeOverlay = function() {
       document.getElementById("successOverlay").style.display = "none";
     };
+
+    // Check admin status in a DOMContentLoaded or after script is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      fetch("/admin/api/status")
+        .then((r) => r.json())
+        .then((data) => {
+          const navLinks = document.getElementById("navLinks");
+          if (data.loggedIn) {
+            navLinks.innerHTML += '<li><a href="/">Application</a></li>';
+            navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
+            navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
+          } else {
+            navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+          }
+        })
+        .catch(() => {
+          const navLinks = document.getElementById("navLinks");
+          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+        });
+    });
   </script>
 </body>
 </html>
