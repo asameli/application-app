@@ -49,7 +49,7 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Applications will be populated here -->
+        <!-- Apps here -->
       </tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
@@ -93,7 +93,7 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Failed logins will be populated here -->
+        <!-- Failed logins here -->
       </tbody>
     </table>
     <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
@@ -101,10 +101,11 @@
   </div>
 
   <footer class="footer">
-    <span>Version 2.0.0</span>
+    <span>Version 2.0.2</span>
   </footer>
 
   <script>
+    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
@@ -123,7 +124,8 @@
         navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
-    function fetchApplications() {
+    // Globally define these functions so the inline onclick calls work
+    window.fetchApplications = function() {
       const status = document.getElementById('statusFilter').value;
       const sort = document.getElementById('sortBy').value;
       let url = `/admin/api/applications?`;
@@ -148,8 +150,8 @@
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td class="doc-link">${renderDocuments(app.documents)}</td>
-                <td class="actions-cell">
+                <td>${renderDocuments(app.documents)}</td>
+                <td>
                   <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
                   <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
                   <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
@@ -167,13 +169,14 @@
       let docs;
       try {
         docs = JSON.parse(docJSON);
-      } catch (e) {
+      } catch(e) {
         return 'Invalid docs';
       }
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
-      return docs.map(doc =>
-        `<a href="/${doc.path}" download="${doc.original}">${doc.original}</a>`
-      ).join('<br>');
+      return docs.map(d => {
+        const filename = d.path.split('/').pop();
+        return `<a href="/${d.path}" download="${filename}">${d.original}</a>`;
+      }).join('<br>');
     }
 
     function fetchCount() {
@@ -194,6 +197,30 @@
         });
     }
 
+    // Provide global references so inline onclick can call them
+    window.updateStatus = function(id, status) {
+      fetch(`/admin/api/application/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message || data.error);
+        fetchApplications();
+      });
+    }
+
+    window.deleteApplication = function(id) {
+      if (!confirm('Delete this application?')) return;
+      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          alert(data.message || data.error);
+          fetchApplications();
+        });
+    }
+
     document.getElementById('templatesForm').addEventListener('submit', e => {
       e.preventDefault();
       const body = {
@@ -211,7 +238,7 @@
       .catch(err => alert('Error updating templates: ' + err.message));
     });
 
-    // Password change
+    // Change Admin Password
     document.getElementById('changePassForm').addEventListener('submit', e => {
       e.preventDefault();
       const oldPassword = document.getElementById('oldPassword').value.trim();
@@ -233,9 +260,9 @@
       });
     });
 
-    // Failed login attempts
+    // If you have a failed login logs endpoint
     let currentFailsPage = 1;
-    function fetchFailedLogins(page = 1) {
+    window.fetchFailedLogins = function(page = 1) {
       currentFailsPage = page;
       fetch(`/admin/api/failed-logins?page=${page}`)
         .then(r => r.json())
@@ -275,7 +302,8 @@
           }
         });
     }
-    function flushFailedLogins() {
+
+    window.flushFailedLogins = function() {
       if (!confirm('Delete all failed login attempts?')) return;
       fetch('/admin/api/failed-logins', { method: 'DELETE' })
         .then(r => r.json())
@@ -288,7 +316,9 @@
     function init() {
       fetchApplications();
       fetchTemplates();
-      fetchFailedLogins();
+      if (typeof fetchFailedLogins === 'function') {
+        fetchFailedLogins();
+      }
     }
     init();
   </script>
