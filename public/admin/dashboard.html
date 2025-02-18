@@ -44,12 +44,13 @@
           <th>Email</th>
           <th>Status</th>
           <th>Submitted At</th>
+          <th>IP</th> <!-- New column for IP address -->
           <th>Documents</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        <!-- Apps here -->
+        <!-- Applications will be populated here -->
       </tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
@@ -93,7 +94,7 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Failed logins here -->
+        <!-- Failed logins will be populated here -->
       </tbody>
     </table>
     <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
@@ -101,7 +102,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 2.0.2</span>
+    <span>Version 2.1.0</span>
   </footer>
 
   <script>
@@ -124,7 +125,7 @@
         navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
-    // Globally define these functions so the inline onclick calls work
+    // Globally define functions for inline onclick usage
     window.fetchApplications = function() {
       const status = document.getElementById('statusFilter').value;
       const sort = document.getElementById('sortBy').value;
@@ -150,8 +151,9 @@
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td>${renderDocuments(app.documents)}</td>
-                <td>
+                <td>${app.ip || ''}</td>
+                <td class="doc-link">${renderDocuments(app.documents)}</td>
+                <td class="actions-cell">
                   <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
                   <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
                   <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
@@ -162,7 +164,7 @@
           }
           fetchCount();
         });
-    }
+    };
 
     function renderDocuments(docJSON) {
       if (!docJSON) return '';
@@ -175,7 +177,7 @@
       if (!Array.isArray(docs) || docs.length === 0) return 'No files';
       return docs.map(d => {
         const filename = d.path.split('/').pop();
-        return `<a href="/${d.path}" download="${filename}">${d.original}</a>`;
+        return `<a href="/${d.path}" download="${d.original}">${d.original}</a>`;
       }).join('<br>');
     }
 
@@ -197,7 +199,6 @@
         });
     }
 
-    // Provide global references so inline onclick can call them
     window.updateStatus = function(id, status) {
       fetch(`/admin/api/application/${id}/status`, {
         method: 'POST',
@@ -209,7 +210,7 @@
         alert(data.message || data.error);
         fetchApplications();
       });
-    }
+    };
 
     window.deleteApplication = function(id) {
       if (!confirm('Delete this application?')) return;
@@ -219,7 +220,7 @@
           alert(data.message || data.error);
           fetchApplications();
         });
-    }
+    };
 
     document.getElementById('templatesForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -260,7 +261,6 @@
       });
     });
 
-    // If you have a failed login logs endpoint
     let currentFailsPage = 1;
     window.fetchFailedLogins = function(page = 1) {
       currentFailsPage = page;
@@ -301,7 +301,7 @@
             failsPagination.appendChild(btn);
           }
         });
-    }
+    };
 
     window.flushFailedLogins = function() {
       if (!confirm('Delete all failed login attempts?')) return;
@@ -311,7 +311,7 @@
           alert(data.message || data.error);
           fetchFailedLogins(1);
         });
-    }
+    };
 
     function init() {
       fetchApplications();

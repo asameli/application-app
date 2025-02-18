@@ -1,4 +1,4 @@
-// server.js (v2.0.2)
+// server.js (v2.1.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -45,7 +45,7 @@ function adminAuth(req, res, next) {
   if (req.session && req.session.admin) {
     return next();
   }
-  // Return JSON instead of plain text to avoid parse errors in the client
+  // Return JSON to avoid parse errors
   return res.status(403).json({ error: 'Access denied' });
 }
 
@@ -79,6 +79,7 @@ db.serialize(() => {
     lastname TEXT,
     email TEXT,
     documents TEXT,
+    ip TEXT,
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -104,24 +105,19 @@ db.serialize(() => {
       }
     });
   });
-
-  // If you have any additional tables like login_logs, you can keep them here
-  // ...
 });
 
 // Load email templates
 let emailTemplates = {
-  thankYou: `Dear {{firstname}},\n\nThank you for submitting your application. Your reference ID is {{id}}.\nWe will contact you as soon as possible regarding the next steps.\n\nBest Regards\n`,
-  accepted: `Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.\nWe will contact you to obtain further information about your application.\n\nMany thanks.\nBest Regards\n`,
-  rejected: `Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected.\nWe would like to thank you for your efforts and your interest in the apartment and wish you all the best.\n\nBest Regards\n`
+  thankYou: "Dear {{firstname}},\n\nThank you for submitting your application. Your reference ID is {{id}}.\nWe will contact you as soon as possible regarding the next steps.\n\nBest Regards\n",
+  accepted: "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.\nWe will contact you to obtain further information about your application.\n\nMany thanks.\nBest Regards\n",
+  rejected: "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected.\nWe would like to thank you for your efforts and your interest in the apartment and wish you all the best.\n\nBest Regards\n"
 };
 
-// If TEMPLATES_PATH exists, overwrite defaults with file content
 if (fs.existsSync(TEMPLATES_PATH)) {
   try {
     const data = fs.readFileSync(TEMPLATES_PATH, 'utf8');
     const fromFile = JSON.parse(data);
-    // Overwrite only if they exist
     if (fromFile.thankYou) emailTemplates.thankYou = fromFile.thankYou;
     if (fromFile.accepted) emailTemplates.accepted = fromFile.accepted;
     if (fromFile.rejected) emailTemplates.rejected = fromFile.rejected;
@@ -129,9 +125,10 @@ if (fs.existsSync(TEMPLATES_PATH)) {
   } catch (err) {
     console.error("Error reading emailTemplates.json:", err);
   }
+} else {
+  console.log("No emailTemplates.json found; using defaults in memory.");
 }
 
-// Log emails to DB
 function logEmail(toEmail, subject, message, success, errorMsg) {
   const eid = uuid.v4();
   db.run(`
@@ -140,7 +137,6 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
   `, [eid, toEmail, subject, message, success ? 1 : 0, errorMsg || null]);
 }
 
-// Use system mail command with a fixed sender address
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error) => {
@@ -161,11 +157,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Post => form submission
+// Post => form submission (with IP logging)
 app.post('/', upload.array('documents', 10), (req, res) => {
   const firstname = sanitizeInput(req.body.firstname);
   const lastname = sanitizeInput(req.body.lastname);
   const email = sanitizeInput(req.body.email);
+  // Retrieve IP address from header or socket
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
   const id = uuid.v4();
   const docs = req.files.map(file => ({
@@ -175,9 +173,9 @@ app.post('/', upload.array('documents', 10), (req, res) => {
   const documentsJSON = JSON.stringify(docs);
 
   db.run(`
-    INSERT INTO applications (id, firstname, lastname, email, documents)
-    VALUES (?, ?, ?, ?, ?)
-  `, [id, firstname, lastname, email, documentsJSON], function(err) {
+    INSERT INTO applications (id, firstname, lastname, email, documents, ip)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [id, firstname, lastname, email, documentsJSON, ip], function(err) {
     if (err) {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
@@ -187,6 +185,10 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
+
+    // Send notification email to wohnung@surwave.ch
+    const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}).\nEmail: ${email}\nIP: ${ip}\nUploaded documents: ${docs.map(d => d.original).join(', ')}`;
+    sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
 
     return res.json({
       success: true,
@@ -231,7 +233,7 @@ app.get('/admin/api/status', (req, res) => {
   res.json({ loggedIn: false });
 });
 
-// Filter & Sort Applications
+// Filter & Sort Applications (now including IP)
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   const { status, sortBy } = req.query;
   let baseQuery = "SELECT * FROM applications";
@@ -282,12 +284,8 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      const template = (status === 'accepted')
-        ? emailTemplates.accepted
-        : emailTemplates.rejected;
-      const emailText = template
-        .replace('{{firstname}}', row.firstname)
-        .replace('{{id}}', id);
+      const template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
+      const emailText = template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
       res.json({ message: "Status updated and email sent" });
     });
@@ -350,11 +348,6 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// If you have failed login logs with pagination/flush logic, you can keep them here
-// Example:
-// app.get('/admin/api/failed-logins', adminAuth, (req, res) => { ... });
-// app.delete('/admin/api/failed-logins', adminAuth, (req, res) => { ... });
-
 // GET/POST routes for email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   console.log("Returning templates to admin:", emailTemplates);
@@ -374,5 +367,5 @@ app.post('/admin/api/templates', adminAuth, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v2.0.2 running on port ${PORT}`);
+  console.log(`Server v2.1.0 running on port ${PORT}`);
 });
