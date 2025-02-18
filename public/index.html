@@ -15,7 +15,7 @@
   </header>
 
   <div class="container fancy-card">
-    <h1 style="margin-top: 0;">Apartment application</h1>
+    <h1>Apartment application</h1>
     <p>
       Hi There! 👋 Thank you for your interest in the apartment at Strickstrasse 10 in Uster.
       Please upload your application and the relevant documents here.
@@ -42,18 +42,16 @@
   </div>
 
   <footer class="footer">
-    <span>Version 1.9.2</span>
+    <span>Version 1.9.3</span>
   </footer>
 
-  <script src="main.js"></script>
   <script>
-    // Check admin status
     fetch('/admin/api/status')
       .then(r => r.json())
       .then(data => {
         const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = '';
-        if (data.loggedIn) {
+        if(data.loggedIn) {
           navLinks.innerHTML += '<li><a href="/">Application</a></li>';
           navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
           navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
@@ -61,37 +59,35 @@
           navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
         }
       })
-      .catch(() => {
-        const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
+      .catch(()=> {
+        document.getElementById('navLinks').innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
     const form = document.getElementById('applicationForm');
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async(e)=>{
       e.preventDefault();
       const formData = new FormData(form);
       const responseElem = document.getElementById('response');
-      responseElem.textContent = 'Submitting...';
-
+      responseElem.textContent='Submitting...';
       try {
-        const resp = await fetch('/', {
-          method: 'POST',
+        const resp = await fetch('/',{
+          method:'POST',
           body: formData
         });
-        if (!resp.ok) {
-          const text = await resp.text();
-          responseElem.textContent = text;
+        if(!resp.ok){
+          const text=await resp.text();
+          responseElem.textContent=text;
           return;
         }
-        const data = await resp.json();
-        if (data.success) {
-          responseElem.textContent = data.message;
+        const data=await resp.json();
+        if(data.success){
+          responseElem.textContent=data.message;
           form.reset();
         } else {
-          responseElem.textContent = data.message || 'Error occurred';
+          responseElem.textContent=data.message||'Error occurred';
         }
-      } catch (err) {
-        responseElem.textContent = 'An error occurred: ' + err.message;
+      } catch(err){
+        responseElem.textContent='An error occurred: '+err.message;
       }
     });
   </script>

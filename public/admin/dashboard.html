@@ -49,37 +49,34 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Apps here -->
       </tbody>
     </table>
     <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
 
-    <h2 class="section-title">Email Templates</h2>
+    <h2>Email Templates</h2>
     <form id="templatesForm">
       <label for="thankYou">Thank You Template:</label>
-      <textarea name="thankYou" id="thankYou" rows="4"></textarea>
+      <textarea id="thankYou" rows="4"></textarea>
 
       <label for="accepted">Accepted Template:</label>
-      <textarea name="accepted" id="accepted" rows="4"></textarea>
+      <textarea id="accepted" rows="4"></textarea>
 
       <label for="rejected">Rejected Template:</label>
-      <textarea name="rejected" id="rejected" rows="4"></textarea>
+      <textarea id="rejected" rows="4"></textarea>
 
       <button type="submit">Update Templates</button>
     </form>
 
-    <h2 class="section-title">Change Admin Password</h2>
+    <h2>Change Admin Password</h2>
     <form id="changePassForm">
-      <label for="oldPassword">Old Password:</label>
-      <input type="password" id="oldPassword" name="oldPassword" required />
-
-      <label for="newPassword">New Password:</label>
-      <input type="password" id="newPassword" name="newPassword" required />
-
+      <label>Old Password:</label>
+      <input type="password" id="oldPassword" required>
+      <label>New Password:</label>
+      <input type="password" id="newPassword" required>
       <button type="submit">Change Password</button>
     </form>
 
-    <h2 class="section-title">Failed Login Attempts</h2>
+    <h2>Failed Login Attempts</h2>
     <div style="margin-bottom:1rem;">
       <button onclick="flushFailedLogins()">Flush All Failed Logins</button>
     </div>
@@ -92,67 +89,64 @@
           <th>Created At</th>
         </tr>
       </thead>
-      <tbody>
-        <!-- Fails here -->
-      </tbody>
+      <tbody></tbody>
     </table>
     <div id="noFailsMessage" class="empty-message" style="display:none;">No failed logins found.</div>
     <div id="failsPagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.9.2</span>
+    <span>Version 1.9.3</span>
   </footer>
 
   <script>
     fetch('/admin/api/status')
-      .then(r => r.json())
-      .then(data => {
-        const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '';
-        if (data.loggedIn) {
-          navLinks.innerHTML += '<li><a href="/">Application</a></li>';
-          navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
-          navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
+      .then(r=>r.json())
+      .then(data=>{
+        const navLinks=document.getElementById('navLinks');
+        navLinks.innerHTML='';
+        if(data.loggedIn){
+          navLinks.innerHTML+='<li><a href="/">Application</a></li>';
+          navLinks.innerHTML+='<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
+          navLinks.innerHTML+='<li><a href="/admin/logout">Logout</a></li>';
         } else {
-          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+          navLinks.innerHTML+='<li><a href="/admin/login.html">Login</a></li>';
         }
       })
-      .catch(() => {
-        const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
+      .catch(()=> {
+        document.getElementById('navLinks').innerHTML='<li><a href="/admin/login.html">Login</a></li>';
       });
 
-    function fetchApplications() {
-      const status = document.getElementById('statusFilter').value;
-      const sort = document.getElementById('sortBy').value;
-      let url = `/admin/api/applications?`;
-      if (status) url += `status=${status}&`;
-      if (sort) url += `sortBy=${sort}`;
+    function fetchApplications(){
+      const status=document.getElementById('statusFilter').value;
+      const sort=document.getElementById('sortBy').value;
+      let url='/admin/api/applications?';
+      if(status) url+=`status=${status}&`;
+      if(sort) url+=`sortBy=${sort}`;
 
       fetch(url)
-        .then(r => r.json())
-        .then(data => {
-          const tableBody = document.querySelector('#applicationsTable tbody');
-          const emptyMessage = document.getElementById('emptyMessage');
-          tableBody.innerHTML = '';
-          if (!data || data.length === 0) {
-            emptyMessage.style.display = 'block';
+        .then(r=>r.json())
+        .then(data=>{
+          const tableBody=document.querySelector('#applicationsTable tbody');
+          const emptyMessage=document.getElementById('emptyMessage');
+          tableBody.innerHTML='';
+          if(!data||data.length===0){
+            emptyMessage.style.display='block';
           } else {
-            emptyMessage.style.display = 'none';
-            data.forEach(app => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
+            emptyMessage.style.display='none';
+            data.forEach(app=>{
+              const row=document.createElement('tr');
+              row.innerHTML=`
                 <td>${app.id}</td>
                 <td>${app.firstname} ${app.lastname}</td>
                 <td>${app.email}</td>
                 <td>${app.status}</td>
                 <td>${app.created_at}</td>
-                <td>${renderDocuments(app.documents)}</td>
+                <td>${renderDocs(app.documents)}</td>
                 <td>
-                  <button onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
-                  <button onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
-                  <button onclick="deleteApplication('${app.id}')">Delete</button>
+                  <button onclick="updateStatus('${app.id}','accepted')">Accept</button>
+                  <button onclick="updateStatus('${app.id}','rejected')">Reject</button>
+                  <button onclick="deleteApp('${app.id}')">Delete</button>
                 </td>
               `;
               tableBody.appendChild(row);
@@ -162,120 +156,115 @@
         });
     }
 
-    function renderDocuments(docJSON) {
-      if (!docJSON) return '';
+    function renderDocs(docJSON){
+      if(!docJSON) return '';
       let docs;
-      try {
-        docs = JSON.parse(docJSON);
-      } catch(e) {
-        return 'Invalid docs';
-      }
-      if (!Array.isArray(docs) || docs.length===0) return 'No files';
-      return docs.map(d => {
-        const filename = d.path.split('/').pop();
-        return `<a href="/${d.path}" download="${filename}">${d.original}</a>`;
-      }).join('<br>');
+      try{
+        docs=JSON.parse(docJSON);
+      }catch(e){return 'Invalid docs';}
+      if(!Array.isArray(docs)||docs.length===0)return 'No files';
+      return docs.map(d=>`<a href="/${d.path}" download="${d.original}">${d.original}</a>`).join('<br>');
     }
 
-    function fetchCount() {
+    function fetchCount(){
       fetch('/admin/api/count')
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById('appCount').innerText = data.count;
+        .then(r=>r.json())
+        .then(data=>{
+          document.getElementById('appCount').textContent=data.count;
         });
     }
 
-    function fetchTemplates() {
+    function fetchTemplates(){
       fetch('/admin/api/templates')
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById('thankYou').value = data.thankYou;
-          document.getElementById('accepted').value = data.accepted;
-          document.getElementById('rejected').value = data.rejected;
+        .then(r=>r.json())
+        .then(data=>{
+          document.getElementById('thankYou').value=data.thankYou||'';
+          document.getElementById('accepted').value=data.accepted||'';
+          document.getElementById('rejected').value=data.rejected||'';
         });
     }
 
-    function updateStatus(id, status) {
-      fetch(`/admin/api/application/${id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+    function updateStatus(id, status){
+      fetch(`/admin/api/application/${id}/status`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({status})
       })
-      .then(r => r.json())
-      .then(data => {
-        alert(data.message || data.error);
+      .then(r=>r.json())
+      .then(data=>{
+        alert(data.message||data.error);
         fetchApplications();
       });
     }
 
-    function deleteApplication(id) {
-      if (!confirm('Delete this application?')) return;
-      fetch(`/admin/api/application/${id}`, { method:'DELETE' })
-        .then(r => r.json())
-        .then(data => {
-          alert(data.message || data.error);
+    function deleteApp(id){
+      if(!confirm('Delete this application?'))return;
+      fetch(`/admin/api/application/${id}`,{method:'DELETE'})
+        .then(r=>r.json())
+        .then(data=>{
+          alert(data.message||data.error);
           fetchApplications();
         });
     }
 
-    document.getElementById('templatesForm').addEventListener('submit', e => {
+    document.getElementById('templatesForm').addEventListener('submit', e=>{
       e.preventDefault();
-      const body = {
-        thankYou: document.getElementById('thankYou').value,
-        accepted: document.getElementById('accepted').value,
-        rejected: document.getElementById('rejected').value
+      const body={
+        thankYou:document.getElementById('thankYou').value,
+        accepted:document.getElementById('accepted').value,
+        rejected:document.getElementById('rejected').value
       };
-      fetch('/admin/api/templates', {
+      fetch('/admin/api/templates',{
         method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify(body)
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(body)
       })
-      .then(r => r.json())
-      .then(data => alert(data.message || data.error));
+      .then(r=>r.json())
+      .then(data=>alert(data.message||data.error));
     });
 
     // Password change
-    document.getElementById('changePassForm').addEventListener('submit', e => {
+    document.getElementById('changePassForm').addEventListener('submit', e=>{
       e.preventDefault();
-      const oldPassword = document.getElementById('oldPassword').value;
-      const newPassword = document.getElementById('newPassword').value;
-      if (!oldPassword || !newPassword) {
-        alert("Please fill out both fields.");
+      const oldPassword=document.getElementById('oldPassword').value.trim();
+      const newPassword=document.getElementById('newPassword').value.trim();
+      if(!oldPassword||!newPassword){
+        alert('Please fill out both fields.');
         return;
       }
-      fetch('/admin/api/change-password', {
+      fetch('/admin/api/change-password',{
         method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ oldPassword, newPassword })
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ oldPassword, newPassword })
       })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) alert(data.error);
+      .then(r=>r.json())
+      .then(data=>{
+        if(data.error) alert(data.error);
         else alert(data.message);
         document.getElementById('changePassForm').reset();
       });
     });
 
-    // Failed logins
+    // Failed login attempts
     let currentFailsPage=1;
-    function fetchFailedLogins(page=1) {
+    function fetchFailedLogins(page=1){
       currentFailsPage=page;
       fetch(`/admin/api/failed-logins?page=${page}`)
         .then(r=>r.json())
-        .then(data => {
-          const { failedLogins, total, page, pages } = data;
-          const tableBody = document.querySelector('#failedLoginsTable tbody');
-          const noFailsMessage = document.getElementById('noFailsMessage');
-          const failsPagination = document.getElementById('failsPagination');
+        .then(data=>{
+          const {failedLogins,total,page,pages}=data;
+          const tableBody=document.querySelector('#failedLoginsTable tbody');
+          const noFailsMessage=document.getElementById('noFailsMessage');
+          const failsPagination=document.getElementById('failsPagination');
           tableBody.innerHTML='';
           failsPagination.innerHTML='';
 
-          if(!failedLogins || failedLogins.length===0){
+          if(!failedLogins||failedLogins.length===0){
             noFailsMessage.style.display='block';
           } else {
             noFailsMessage.style.display='none';
             failedLogins.forEach(item=>{
-              const row = document.createElement('tr');
+              const row=document.createElement('tr');
               row.innerHTML=`
                 <td>${item.id}</td>
                 <td>${item.username}</td>
@@ -289,14 +278,15 @@
             const btn=document.createElement('button');
             btn.textContent=p;
             if(p===page) btn.disabled=true;
-            btn.addEventListener('click', ()=>fetchFailedLogins(p));
+            btn.addEventListener('click',()=>fetchFailedLogins(p));
             failsPagination.appendChild(btn);
           }
         });
     }
-    function flushFailedLogins() {
-      if(!confirm('Delete all failed login attempts?')) return;
-      fetch('/admin/api/failed-logins',{ method:'DELETE' })
+
+    function flushFailedLogins(){
+      if(!confirm('Delete all failed login attempts?'))return;
+      fetch('/admin/api/failed-logins',{method:'DELETE'})
         .then(r=>r.json())
         .then(data=>{
           alert(data.message||data.error);
@@ -304,7 +294,7 @@
         });
     }
 
-    function init() {
+    function init(){
       fetchApplications();
       fetchTemplates();
       fetchFailedLogins();

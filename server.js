@@ -1,4 +1,4 @@
-// server.js (v1.9.2)
+// server.js (v1.9.3)
 
 const express = require('express');
 const session = require('express-session');
@@ -10,7 +10,7 @@ const uuid = require('uuid');
 const { exec } = require('child_process');
 const bcrypt = require('bcryptjs');
 
-// Minimal XSS Sanitization
+// Minimal XSS sanitization
 function sanitizeInput(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/[<>'"]/g, '').trim();
@@ -19,52 +19,50 @@ function sanitizeInput(str) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse URL-encoded and JSON bodies
+// Parse URL-encoded & JSON bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// *** Session config from v1.9.0 (simple, "was working")
+// *** Session config: same as v1.9.0 but forces secure=false
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    secure: false  // ensures cookie is set behind Plesk even if Node sees HTTP
+  }
 }));
 
-// Serve static files from public/
+// Serve static from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// *** Security fix from v1.9.0: Protect /uploads
+// Security fix from v1.9.0: protect /uploads
 function adminAuth(req, res, next) {
   if (req.session && req.session.admin) {
     return next();
   }
-  // As in v1.9.0, we return plain text
+  // As in v1.9.0, plain text
   return res.status(403).send('Access denied');
 }
 app.use('/uploads', adminAuth, express.static(path.join(__dirname, 'uploads')));
 
-// Configure Multer: store original filename
+// Multer config: store original filenames
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
+  destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
-    const uniqueName = uuid.v4() + ext;
-    cb(null, uniqueName);
+    cb(null, uuid.v4() + ext);
   }
 });
 const upload = multer({ storage });
 
-// Database setup (same as v1.9.0)
-const db = new sqlite3.Database('./applications.db', (err) => {
-  if (err) console.error("DB connection error:", err);
+// DB setup, same as v1.9.0
+const db = new sqlite3.Database('./applications.db', err => {
+  if (err) console.error('DB connection error:', err);
   else console.log('Connected to SQLite database.');
 });
 
-// Create tables if not exist
 db.serialize(() => {
-  // Applications table
   db.run(`CREATE TABLE IF NOT EXISTS applications (
     id TEXT PRIMARY KEY,
     firstname TEXT,
@@ -74,7 +72,6 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  // Email logs
   db.run(`CREATE TABLE IF NOT EXISTS email_logs (
     id TEXT PRIMARY KEY,
     to_email TEXT,
@@ -84,7 +81,6 @@ db.serialize(() => {
     error_message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  // Admins table
   db.run(`CREATE TABLE IF NOT EXISTS admins (
     username TEXT PRIMARY KEY,
     password TEXT
@@ -107,7 +103,7 @@ db.serialize(() => {
   )`);
 });
 
-// *** Load updated email templates
+// Updated email templates
 const templatesFile = path.join(__dirname, 'emailTemplates.json');
 let emailTemplates = {
   thankYou: `Dear {{firstname}},
@@ -138,11 +134,11 @@ if (fs.existsSync(templatesFile)) {
     const data = fs.readFileSync(templatesFile);
     emailTemplates = JSON.parse(data);
   } catch (err) {
-    console.error("Error reading emailTemplates.json:", err);
+    console.error('Error reading emailTemplates.json:', err);
   }
 }
 
-// Log emails to DB
+// Email logging
 function logEmail(toEmail, subject, message, success, errorMsg) {
   const eid = uuid.v4();
   db.run(`
@@ -151,12 +147,12 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
   `, [eid, toEmail, subject, message, success ? 1 : 0, errorMsg || null]);
 }
 
-// Use system mail command with fixed sender address
+// System mail command
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
   exec(mailCommand, (error) => {
     if (error) {
-      console.error(`Error sending email: ${error.message}`);
+      console.error('Error sending email:', error.message);
       logEmail(to, subject, message, false, error.message);
     } else {
       console.log(`Email sent to ${to}`);
@@ -172,8 +168,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Post => form submission
-// Extra: also sends email to "wohnung@surwave.ch"
+// New application => also email "wohnung@surwave.ch"
 app.post('/', upload.array('documents', 10), (req, res) => {
   const firstname = sanitizeInput(req.body.firstname);
   const lastname = sanitizeInput(req.body.lastname);
@@ -191,19 +186,19 @@ app.post('/', upload.array('documents', 10), (req, res) => {
     VALUES (?, ?, ?, ?, ?)
   `, [id, firstname, lastname, email, documentsJSON], function(err) {
     if (err) {
-      console.error("DB insert error:", err);
+      console.error('DB insert error:', err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-    // "thank you" email
+    // Thank you email
     const emailText = emailTemplates.thankYou
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
 
-    // Also notify "wohnung@surwave.ch"
+    // Additional email to "wohnung@surwave.ch"
     const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}).
 Email: ${email}.
-Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
+Uploaded documents: ${docs.map(d => d.original).join(', ')}`;
     sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
 
     res.json({
@@ -213,8 +208,7 @@ Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
   });
 });
 
-// Admin login
-// IP-based logging
+// Admin login => IP-based logs
 app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = req.body.password || '';
@@ -261,7 +255,7 @@ app.get('/admin/api/status', (req, res) => {
   return res.json({ loggedIn: false });
 });
 
-// Filter & Sort Applications
+// Filter & sort applications
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   const { status, sortBy } = req.query;
   let baseQuery = "SELECT * FROM applications";
@@ -275,7 +269,6 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   if (conditions.length > 0) {
     baseQuery += " WHERE " + conditions.join(" AND ");
   }
-
   if (sortBy === 'created_atAsc') {
     baseQuery += " ORDER BY created_at ASC";
   } else if (sortBy === 'created_atDesc') {
@@ -293,7 +286,7 @@ app.get('/admin/api/applications', adminAuth, (req, res) => {
   });
 });
 
-// Update status
+// Update status => accepted/rejected
 app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -314,8 +307,8 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
         console.error("DB update error (status):", err2);
         return res.status(500).json({ error: `Database error: ${err2.message}` });
       }
-      let template = (status === 'accepted') ? emailTemplates.accepted : emailTemplates.rejected;
-      let emailText = template
+      const template = (status==='accepted') ? emailTemplates.accepted : emailTemplates.rejected;
+      const emailText = template
         .replace('{{firstname}}', row.firstname)
         .replace('{{id}}', id);
       sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
@@ -332,7 +325,7 @@ app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
       console.error("DB delete error:", err);
       return res.status(500).json({ error: `Database error: ${err.message}` });
     }
-    if (this.changes === 0) {
+    if (this.changes===0) {
       return res.status(404).json({ error: "Application not found" });
     }
     res.json({ message: "Application deleted successfully" });
@@ -350,7 +343,7 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// *** Admin Password Change
+// Admin password change
 app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
@@ -359,7 +352,7 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   const adminUser = req.session.admin;
   db.get("SELECT * FROM admins WHERE username = ?", [adminUser], (err, row) => {
     if (err) {
-      console.error("Error fetching admin for password change:", err);
+      console.error("DB fetch error (password change):", err);
       return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     if (!row) {
@@ -380,48 +373,57 @@ app.post('/admin/api/change-password', adminAuth, (req, res) => {
   });
 });
 
-// *** Failed logins with pagination
+// GET /admin/api/failed-logins => pagination
 app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
-  const page = parseInt(req.query.page || '1', 10);
-  const limit = 10;
-  const offset = (page - 1) * limit;
+  const page = parseInt(req.query.page||'1',10);
+  const limit=10;
+  const offset=(page-1)*limit;
 
-  db.all(
-    "SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+  db.all("SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
     [limit, offset],
     (err, rows) => {
-      if (err) {
+      if(err){
         console.error("DB fetch error (failed logins):", err);
-        return res.status(500).json({ error: `Database error: ${err.message}` });
+        return res.status(500).json({ error:`Database error: ${err.message}` });
       }
-      db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0", (err2, row) => {
-        if (err2) {
+      db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0",(err2,row2)=>{
+        if(err2){
           console.error("DB count error (failed logins):", err2);
-          return res.status(500).json({ error: `Database error: ${err2.message}` });
+          return res.status(500).json({ error:`Database error: ${err2.message}` });
         }
         res.json({
           failedLogins: rows,
-          total: row.total,
+          total: row2.total,
           page,
-          pages: Math.ceil(row.total / limit)
+          pages: Math.ceil(row2.total/limit)
         });
       });
     }
   );
 });
 
-// *** Flush all failed logins
+// DELETE /admin/api/failed-logins => flush
 app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
-  db.run("DELETE FROM login_logs WHERE success=0", function(err) {
-    if (err) {
+  db.run("DELETE FROM login_logs WHERE success=0", function(err){
+    if(err){
       console.error("Error flushing failed logins:", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+      return res.status(500).json({ error:`Database error: ${err.message}` });
     }
-    res.json({ message: "All failed login attempts have been deleted." });
+    res.json({ message:"All failed login attempts have been deleted." });
   });
+});
+
+// Email templates
+app.get('/admin/api/templates', adminAuth, (req, res) => {
+  res.json(emailTemplates);
+});
+app.post('/admin/api/templates', adminAuth, (req, res) => {
+  emailTemplates = req.body;
+  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
+  res.json({ message: "Templates updated" });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.9.2 running on port ${PORT} (based on v1.9.0 + new features)`);
+  console.log(`Server v1.9.3 running on port ${PORT} (v1.9.0 base + new features, secure=false cookie).`);
 });
