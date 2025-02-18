@@ -22,11 +22,10 @@
     <p>
       Hi There! 👋 Thank you for your interest in the apartment at Strickstrasse 10 in Uster.
       Please upload your application and the relevant documents here.
-      Several documents can be uploaded. As soon as we have received the documents, we will
-      review them and get back to you as soon as possible.
+      You can add multiple documents by clicking the "Add Document" button.
     </p>
 
-    <form id="applicationForm" enctype="multipart/form-data">
+    <form id="applicationForm">
       <label for="firstname">First Name:</label>
       <input type="text" name="firstname" required />
 
@@ -36,8 +35,12 @@
       <label for="email">Email Address:</label>
       <input type="email" name="email" required />
 
-      <label for="documents">Upload Documents:</label>
-      <input type="file" name="documents" multiple required />
+      <!-- Custom file uploader -->
+      <div id="uploadContainer">
+        <button type="button" id="addFileButton">Add Document</button>
+        <input type="file" id="fileInput" style="display:none;" accept="*/*" />
+        <ul id="fileList"></ul>
+      </div>
 
       <button type="submit">Submit Application</button>
     </form>
@@ -56,7 +59,7 @@
   </div>
 
   <footer class="footer">
-    <span>Version 2.0.3</span>
+    <span>Version 2.2.0</span>
   </footer>
 
   <script src="main.js"></script>
@@ -79,41 +82,6 @@
         const navLinks = document.getElementById("navLinks");
         navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
-
-    const form = document.getElementById("applicationForm");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(form);
-      const responseElem = document.getElementById("response");
-      responseElem.innerHTML = "Submitting...";
-
-      try {
-        const resp = await fetch("/", {
-          method: "POST",
-          body: formData,
-        });
-        if (!resp.ok) {
-          const text = await resp.text();
-          responseElem.innerHTML = text;
-          return;
-        }
-        const data = await resp.json();
-        if (data.success) {
-          document.getElementById("overlayMessage").innerText = data.message;
-          document.getElementById("successOverlay").style.display = "flex";
-          responseElem.innerHTML = "";
-          form.reset();
-        } else {
-          responseElem.innerHTML = data.message || "Error occurred";
-        }
-      } catch (err) {
-        responseElem.innerHTML = "An error occurred: " + err.message;
-      }
-    });
-
-    function closeOverlay() {
-      document.getElementById("successOverlay").style.display = "none";
-    }
   </script>
 </body>
 </html>

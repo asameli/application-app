@@ -1,4 +1,4 @@
-/* styles.css (v2.0.3) */
+/* styles.css (v2.2.0) */
 
 /* Shared & Body */
 body {
@@ -139,8 +139,7 @@ body.dark {
 .apps-table thead {
   background-color: #eee;
 }
-.apps-table th,
-.apps-table td {
+.apps-table th, .apps-table td {
   padding: 0.75rem;
   border: 1px solid #ccc;
   text-align: left;
@@ -211,7 +210,7 @@ body.dark {
   text-decoration: underline;
 }
 
-/* Overlay changes */
+/* Overlay styling */
 #successOverlay {
   display: none;
   position: fixed;
@@ -249,4 +248,48 @@ body.dark {
 body.dark #successOverlay .overlay-content {
   background: #2a2a2a;
   color: #fff;
+}
+
+/* Custom file uploader styles */
+#uploadContainer {
+  margin-top: 1em;
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+#uploadContainer #addFileButton {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+#uploadContainer #addFileButton:hover {
+  background-color: #0069d9;
+}
+#uploadContainer #fileList {
+  list-style: none;
+  padding-left: 0;
+}
+#uploadContainer #fileList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  background: #f0f0f0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+#uploadContainer #fileList li button {
+  background-color: #dc3545;
+  color: #fff;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#uploadContainer #fileList li button:hover {
+  background-color: #c82333;
 }
