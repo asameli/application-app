@@ -1,4 +1,4 @@
-// server.js (v1.9.3)
+// server.js (v1.9.4)
 
 const express = require('express');
 const session = require('express-session');
@@ -19,21 +19,27 @@ function sanitizeInput(str) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse URL-encoded & JSON bodies
+// Parse bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// *** Session config: same as v1.9.0 but forces secure=false
+// *** Simple session config
+//    secure=false => set cookies even if Node sees HTTP
+//    sameSite=none => cross-site usage allowed
+//    resave=true, rolling=true => refresh session on each response
+//    saveUninitialized=false => do not create empty sessions
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
-  resave: false,
+  resave: true,
+  rolling: true,
   saveUninitialized: false,
   cookie: {
-    secure: false  // ensures cookie is set behind Plesk even if Node sees HTTP
+    secure: false,
+    sameSite: 'none'
   }
 }));
 
-// Serve static from public/
+// Serve static from public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Security fix from v1.9.0: protect /uploads
@@ -41,12 +47,11 @@ function adminAuth(req, res, next) {
   if (req.session && req.session.admin) {
     return next();
   }
-  // As in v1.9.0, plain text
   return res.status(403).send('Access denied');
 }
 app.use('/uploads', adminAuth, express.static(path.join(__dirname, 'uploads')));
 
-// Multer config: store original filenames
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
@@ -56,8 +61,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// DB setup, same as v1.9.0
-const db = new sqlite3.Database('./applications.db', err => {
+// SQLite DB (same folder)
+const db = new sqlite3.Database('./applications.db', (err) => {
   if (err) console.error('DB connection error:', err);
   else console.log('Connected to SQLite database.');
 });
@@ -93,7 +98,7 @@ db.serialize(() => {
       }
     });
   });
-  // *** New: login_logs for IP-based logging
+  // *** login_logs for IP-based login attempts
   db.run(`CREATE TABLE IF NOT EXISTS login_logs (
     id TEXT PRIMARY KEY,
     username TEXT,
@@ -131,14 +136,14 @@ Best Regards
 };
 if (fs.existsSync(templatesFile)) {
   try {
-    const data = fs.readFileSync(templatesFile);
+    const data = fs.readFileSync(templatesFile, 'utf8');
     emailTemplates = JSON.parse(data);
-  } catch (err) {
-    console.error('Error reading emailTemplates.json:', err);
+  } catch(e) {
+    console.error('Error reading emailTemplates.json:', e);
   }
 }
 
-// Email logging
+// Logging emails
 function logEmail(toEmail, subject, message, success, errorMsg) {
   const eid = uuid.v4();
   db.run(`
@@ -149,8 +154,8 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
 
 // System mail command
 function sendMail(to, subject, message) {
-  const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
-  exec(mailCommand, (error) => {
+  const cmd = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
+  exec(cmd, (error) => {
     if (error) {
       console.error('Error sending email:', error.message);
       logEmail(to, subject, message, false, error.message);
@@ -168,7 +173,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// New application => also email "wohnung@surwave.ch"
+// Post => new application
 app.post('/', upload.array('documents', 10), (req, res) => {
   const firstname = sanitizeInput(req.body.firstname);
   const lastname = sanitizeInput(req.body.lastname);
@@ -179,55 +184,54 @@ app.post('/', upload.array('documents', 10), (req, res) => {
     path: `uploads/${file.filename}`,
     original: file.originalname
   }));
-  const documentsJSON = JSON.stringify(docs);
+  const docsJSON = JSON.stringify(docs);
 
   db.run(`
     INSERT INTO applications (id, firstname, lastname, email, documents)
     VALUES (?, ?, ?, ?, ?)
-  `, [id, firstname, lastname, email, documentsJSON], function(err) {
+  `, [id, firstname, lastname, email, docsJSON], function(err) {
     if (err) {
       console.error('DB insert error:', err);
-      return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
+      return res.status(500).json({ success:false, message:`Database error: ${err.message}` });
     }
-    // Thank you email
-    const emailText = emailTemplates.thankYou
+    // Send "thank you" email
+    const text = emailTemplates.thankYou
       .replace('{{firstname}}', firstname)
       .replace('{{id}}', id);
-    sendMail(email, 'Application Received', emailText);
+    sendMail(email, 'Application Received', text);
 
-    // Additional email to "wohnung@surwave.ch"
+    // Also email "wohnung@surwave.ch"
     const adminNotify = `New application from ${firstname} ${lastname} (ID: ${id}).
 Email: ${email}.
-Uploaded documents: ${docs.map(d => d.original).join(', ')}`;
+Uploaded documents: ${docs.map(d => d.original).join(', ')}.`;
     sendMail('wohnung@surwave.ch', `New application (ID: ${id})`, adminNotify);
 
     res.json({
-      success: true,
-      message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
+      success:true,
+      message:`Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}`
     });
   });
 });
 
-// Admin login => IP-based logs
+// Admin login => logs IP success/fail
 app.post('/admin/login', (req, res) => {
   const username = sanitizeInput(req.body.username);
-  const password = req.body.password || '';
+  const password = req.body.password||'';
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
-  db.get("SELECT * FROM admins WHERE username = ?", [username], (err, row) => {
-    if (err) {
-      console.error("Admin login db error:", err);
+  db.get("SELECT * FROM admins WHERE username=?", [username], (err, row) => {
+    if(err){
+      console.error('Admin login db error:', err);
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
       return res.redirect('/admin/login.html?error=DbError');
     }
-    if (!row) {
+    if(!row){
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
       return res.redirect('/admin/login.html?error=NoUser');
     }
-    const match = bcrypt.compareSync(password, row.password);
-    if (!match) {
+    if(!bcrypt.compareSync(password, row.password)){
       db.run("INSERT INTO login_logs (id, username, success, ip) VALUES (?, ?, ?, ?)",
         [uuid.v4(), username, 0, ip]);
       return res.redirect('/admin/login.html?error=BadPass');
@@ -249,181 +253,177 @@ app.get('/admin/logout', (req, res) => {
 
 // Check if admin is logged in
 app.get('/admin/api/status', (req, res) => {
-  if (req.session && req.session.admin) {
-    return res.json({ loggedIn: true });
+  if(req.session && req.session.admin){
+    return res.json({loggedIn:true});
   }
-  return res.json({ loggedIn: false });
+  res.json({loggedIn:false});
 });
 
-// Filter & sort applications
+// List apps
 app.get('/admin/api/applications', adminAuth, (req, res) => {
   const { status, sortBy } = req.query;
-  let baseQuery = "SELECT * FROM applications";
-  const conditions = [];
-  const params = [];
+  let baseQuery='SELECT * FROM applications';
+  const conditions=[];
+  const params=[];
 
-  if (status && ['pending','accepted','rejected'].includes(status)) {
-    conditions.push("status = ?");
+  if(status && ['pending','accepted','rejected'].includes(status)){
+    conditions.push('status=?');
     params.push(status);
   }
-  if (conditions.length > 0) {
-    baseQuery += " WHERE " + conditions.join(" AND ");
+  if(conditions.length){
+    baseQuery+=' WHERE '+conditions.join(' AND ');
   }
-  if (sortBy === 'created_atAsc') {
-    baseQuery += " ORDER BY created_at ASC";
-  } else if (sortBy === 'created_atDesc') {
-    baseQuery += " ORDER BY created_at DESC";
+  if(sortBy==='created_atAsc'){
+    baseQuery+=' ORDER BY created_at ASC';
+  } else if(sortBy==='created_atDesc'){
+    baseQuery+=' ORDER BY created_at DESC';
   } else {
-    baseQuery += " ORDER BY created_at DESC";
+    baseQuery+=' ORDER BY created_at DESC';
   }
 
-  db.all(baseQuery, params, (err, rows) => {
-    if (err) {
-      console.error("DB fetch error (list apps):", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+  db.all(baseQuery, params, (err, rows)=>{
+    if(err){
+      console.error('DB fetch error (list apps):', err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
     res.json(rows);
   });
 });
 
 // Update status => accepted/rejected
-app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
-  const id = req.params.id;
-  const { status } = req.body;
-  if (!['accepted','rejected'].includes(status)) {
-    return res.status(400).json({ error: "Invalid status" });
+app.post('/admin/api/application/:id/status', adminAuth, (req, res)=>{
+  const id=req.params.id;
+  const { status }=req.body;
+  if(!['accepted','rejected'].includes(status)){
+    return res.status(400).json({error:'Invalid status'});
   }
-  db.get("SELECT * FROM applications WHERE id = ?", [id], (err, row) => {
-    if (err) {
-      console.error("DB fetch error (status update):", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+  db.get('SELECT * FROM applications WHERE id=?',[id],(err,row)=>{
+    if(err){
+      console.error('DB fetch error (status update):', err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
-    if (!row) {
-      console.error("No application found for ID:", id);
-      return res.status(404).json({ error: "Application not found" });
+    if(!row){
+      return res.status(404).json({error:'Application not found'});
     }
-    db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err2) {
-      if (err2) {
-        console.error("DB update error (status):", err2);
-        return res.status(500).json({ error: `Database error: ${err2.message}` });
+    db.run('UPDATE applications SET status=? WHERE id=?',[status,id],function(err2){
+      if(err2){
+        console.error('DB update error (status):', err2);
+        return res.status(500).json({error:`Database error: ${err2.message}`});
       }
-      const template = (status==='accepted') ? emailTemplates.accepted : emailTemplates.rejected;
-      const emailText = template
-        .replace('{{firstname}}', row.firstname)
-        .replace('{{id}}', id);
-      sendMail(row.email, 'Application ' + status.charAt(0).toUpperCase() + status.slice(1), emailText);
-      res.json({ message: "Status updated and email sent" });
+      const template=(status==='accepted')?emailTemplates.accepted:emailTemplates.rejected;
+      const text=template.replace('{{firstname}}', row.firstname).replace('{{id}}', id);
+      sendMail(row.email, `Application ${status}`, text);
+      res.json({message:'Status updated and email sent'});
     });
   });
 });
 
 // Delete application
-app.delete('/admin/api/application/:id', adminAuth, (req, res) => {
-  const id = req.params.id;
-  db.run("DELETE FROM applications WHERE id = ?", [id], function(err) {
-    if (err) {
-      console.error("DB delete error:", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+app.delete('/admin/api/application/:id', adminAuth, (req,res)=>{
+  const id=req.params.id;
+  db.run('DELETE FROM applications WHERE id=?',[id],function(err){
+    if(err){
+      console.error('DB delete error:', err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
-    if (this.changes===0) {
-      return res.status(404).json({ error: "Application not found" });
+    if(this.changes===0){
+      return res.status(404).json({error:'Application not found'});
     }
-    res.json({ message: "Application deleted successfully" });
+    res.json({message:'Application deleted successfully'});
   });
 });
 
-// Count applications
-app.get('/admin/api/count', adminAuth, (req, res) => {
-  db.get("SELECT COUNT(*) as count FROM applications", (err, row) => {
-    if (err) {
-      console.error("DB count error:", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+// Count apps
+app.get('/admin/api/count', adminAuth, (req,res)=>{
+  db.get('SELECT COUNT(*) as count FROM applications',(err,row)=>{
+    if(err){
+      console.error('DB count error:', err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
     res.json(row);
   });
 });
 
 // Admin password change
-app.post('/admin/api/change-password', adminAuth, (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  if (!oldPassword || !newPassword) {
-    return res.status(400).json({ error: "Missing oldPassword or newPassword" });
+app.post('/admin/api/change-password', adminAuth, (req,res)=>{
+  const {oldPassword,newPassword}=req.body;
+  if(!oldPassword||!newPassword){
+    return res.status(400).json({error:'Missing oldPassword or newPassword'});
   }
-  const adminUser = req.session.admin;
-  db.get("SELECT * FROM admins WHERE username = ?", [adminUser], (err, row) => {
-    if (err) {
-      console.error("DB fetch error (password change):", err);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
+  const adminUser=req.session.admin;
+  db.get('SELECT * FROM admins WHERE username=?',[adminUser],(err,row)=>{
+    if(err){
+      console.error('Error fetching admin for password change:', err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
-    if (!row) {
-      return res.status(404).json({ error: "Admin user not found" });
+    if(!row){
+      return res.status(404).json({error:'Admin user not found'});
     }
-    const match = bcrypt.compareSync(oldPassword, row.password);
-    if (!match) {
-      return res.status(400).json({ error: "Old password is incorrect" });
+    if(!bcrypt.compareSync(oldPassword,row.password)){
+      return res.status(400).json({error:'Old password is incorrect'});
     }
-    const hashedNew = bcrypt.hashSync(newPassword, 10);
-    db.run("UPDATE admins SET password = ? WHERE username = ?", [hashedNew, adminUser], function(err2) {
-      if (err2) {
-        console.error("DB update error (password):", err2);
-        return res.status(500).json({ error: `Database error: ${err2.message}` });
+    const hashedNew=bcrypt.hashSync(newPassword,10);
+    db.run('UPDATE admins SET password=? WHERE username=?',[hashedNew,adminUser],function(err2){
+      if(err2){
+        console.error('DB update error (password):', err2);
+        return res.status(500).json({error:`Database error: ${err2.message}`});
       }
-      res.json({ message: "Password changed successfully" });
+      res.json({message:'Password changed successfully'});
     });
   });
 });
 
-// GET /admin/api/failed-logins => pagination
-app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
-  const page = parseInt(req.query.page||'1',10);
+// Failed logins with pagination
+app.get('/admin/api/failed-logins', adminAuth, (req,res)=>{
+  const page=parseInt(req.query.page||'1',10);
   const limit=10;
   const offset=(page-1)*limit;
 
-  db.all("SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+  db.all('SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?',
     [limit, offset],
-    (err, rows) => {
+    (err,rows)=>{
       if(err){
-        console.error("DB fetch error (failed logins):", err);
-        return res.status(500).json({ error:`Database error: ${err.message}` });
+        console.error('DB fetch error (failed logins):',err);
+        return res.status(500).json({error:`Database error: ${err.message}`});
       }
-      db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0",(err2,row2)=>{
+      db.get('SELECT COUNT(*) as total FROM login_logs WHERE success=0',(err2,row2)=>{
         if(err2){
-          console.error("DB count error (failed logins):", err2);
-          return res.status(500).json({ error:`Database error: ${err2.message}` });
+          console.error('DB count error (failed logins):',err2);
+          return res.status(500).json({error:`Database error: ${err2.message}`});
         }
         res.json({
-          failedLogins: rows,
-          total: row2.total,
+          failedLogins:rows,
+          total:row2.total,
           page,
-          pages: Math.ceil(row2.total/limit)
+          pages:Math.ceil(row2.total/limit)
         });
       });
     }
   );
 });
 
-// DELETE /admin/api/failed-logins => flush
-app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
-  db.run("DELETE FROM login_logs WHERE success=0", function(err){
+// Flush all failed logins
+app.delete('/admin/api/failed-logins', adminAuth, (req,res)=>{
+  db.run('DELETE FROM login_logs WHERE success=0',function(err){
     if(err){
-      console.error("Error flushing failed logins:", err);
-      return res.status(500).json({ error:`Database error: ${err.message}` });
+      console.error('Error flushing failed logins:',err);
+      return res.status(500).json({error:`Database error: ${err.message}`});
     }
-    res.json({ message:"All failed login attempts have been deleted." });
+    res.json({message:'All failed login attempts have been deleted.'});
   });
 });
 
 // Email templates
-app.get('/admin/api/templates', adminAuth, (req, res) => {
+app.get('/admin/api/templates', adminAuth, (req,res)=>{
   res.json(emailTemplates);
 });
-app.post('/admin/api/templates', adminAuth, (req, res) => {
-  emailTemplates = req.body;
+app.post('/admin/api/templates', adminAuth, (req,res)=>{
+  emailTemplates=req.body;
   fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
-  res.json({ message: "Templates updated" });
+  res.json({message:'Templates updated'});
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.9.3 running on port ${PORT} (v1.9.0 base + new features, secure=false cookie).`);
+  console.log(`Server v1.9.4 running on port ${PORT} (v1.9.0 base + new features, forced secure=false).`);
 });
