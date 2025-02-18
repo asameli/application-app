@@ -1,6 +1,6 @@
 {
   "name": "application-app",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "A Node.js Express app for apartment applications, integrated with Plesk internal mailer.",
   "main": "server.js",
   "scripts": {
