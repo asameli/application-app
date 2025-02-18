@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS applications (
     lastname TEXT,
     email TEXT,
     documents TEXT,
-    ip TEXT,                         -- New column for logging submitter's IP
+    ip TEXT,
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
