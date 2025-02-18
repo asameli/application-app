@@ -1,4 +1,4 @@
-// server.js (v1.9.0)
+// server.js (v2.0.0)
 
 const express = require('express');
 const session = require('express-session');
@@ -13,12 +13,10 @@ const bcrypt = require('bcryptjs');
 // Minimal XSS Sanitization
 function sanitizeInput(str) {
   if (typeof str !== 'string') return '';
-  return str
-    .replace(/[<>'"]/g, '') // remove special chars
-    .trim();
+  return str.replace(/[<>'"]/g, '').trim();
 }
 
-// Use absolute paths to avoid confusion with working directories
+// Use absolute paths for clarity
 const DB_PATH = path.join(__dirname, 'applications.db');
 const TEMPLATES_PATH = path.join(__dirname, 'emailTemplates.json');
 
@@ -32,7 +30,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Session for admin auth
+// Session for admin auth (simple, as in v1.9.0)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
@@ -105,9 +103,9 @@ db.serialize(() => {
 
 // Load email templates
 let emailTemplates = {
-  thankYou: "Dear {{firstname}},\n\nThank you for your application. Your reference ID is {{id}}.",
-  accepted: "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.",
-  rejected: "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected."
+  thankYou: "Dear {{firstname}},\n\nThank you for submitting your application. Your reference ID is {{id}}.\nWe will contact you as soon as possible regarding the next steps.\n\nBest Regards\n",
+  accepted: "Dear {{firstname}},\n\nCongratulations! Your application (ID: {{id}}) has been accepted and will be forwarded to the agency.\nWe will contact you to obtain further information about your application.\n\nMany thanks.\nBest Regards\n",
+  rejected: "Dear {{firstname}},\n\nWe regret to inform you that your application (ID: {{id}}) has been rejected.\nWe would like to thank you for your efforts and your interest in the apartment and wish you all the best.\n\nBest Regards\n"
 };
 
 if (fs.existsSync(TEMPLATES_PATH)) {
@@ -133,7 +131,7 @@ function logEmail(toEmail, subject, message, success, errorMsg) {
 // Use system mail command with a fixed sender address
 function sendMail(to, subject, message) {
   const mailCommand = `echo "${message}" | mail -s "${subject}" -a "From: mail@flat.surwave.ch" ${to}`;
-  exec(mailCommand, (error, stdout, stderr) => {
+  exec(mailCommand, (error) => {
     if (error) {
       console.error(`Error sending email: ${error.message}`);
       logEmail(to, subject, message, false, error.message);
@@ -172,8 +170,16 @@ app.post('/', upload.array('documents', 10), (req, res) => {
       console.error("DB insert error:", err);
       return res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
-    const emailText = emailTemplates.thankYou.replace('{{firstname}}', firstname).replace('{{id}}', id);
+    // Send "thank you" email to applicant
+    const emailText = emailTemplates.thankYou
+      .replace('{{firstname}}', firstname)
+      .replace('{{id}}', id);
     sendMail(email, 'Application Received', emailText);
+    
+    // *** New Feature for v2.0.0: Also send an email to "wohnung@surwave.ch"
+    const adminNotify = `New application received from ${firstname} ${lastname} (ID: ${id}).\nEmail: ${email}\nDocuments: ${docs.map(d => d.original).join(', ')}`;
+    sendMail('wohnung@surwave.ch', `New Application (ID: ${id})`, adminNotify);
+
     return res.json({ success: true, message: `Your application was submitted successfully! A confirmation email has been sent with your reference ID: ${id}` });
   });
 });
@@ -204,8 +210,6 @@ app.get('/admin/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/admin/login.html');
 });
-
-// Middleware for admin routes (already defined above as adminAuth)
 
 // Check if admin is logged in
 app.get('/admin/api/status', (req, res) => {
@@ -257,7 +261,6 @@ app.post('/admin/api/application/:id/status', adminAuth, (req, res) => {
       return res.status(500).json({ error: `Database error: ${err.message}` });
     }
     if (!row) {
-      console.error("No application found for ID:", id);
       return res.status(404).json({ error: "Application not found" });
     }
     db.run("UPDATE applications SET status = ? WHERE id = ?", [status, id], function(err2) {
@@ -299,7 +302,78 @@ app.get('/admin/api/count', adminAuth, (req, res) => {
   });
 });
 
-// GET/POST routes for email templates
+// Admin password change
+app.post('/admin/api/change-password', adminAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: "Missing oldPassword or newPassword" });
+  }
+  const adminUser = req.session.admin;
+  db.get("SELECT * FROM admins WHERE username = ?", [adminUser], (err, row) => {
+    if (err) {
+      console.error("Error fetching admin for password change:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    if (!row) {
+      return res.status(404).json({ error: "Admin user not found" });
+    }
+    const match = bcrypt.compareSync(oldPassword, row.password);
+    if (!match) {
+      return res.status(400).json({ error: "Old password is incorrect" });
+    }
+    const hashedNew = bcrypt.hashSync(newPassword, 10);
+    db.run("UPDATE admins SET password = ? WHERE username = ?", [hashedNew, adminUser], function(err2) {
+      if (err2) {
+        console.error("Error updating admin password:", err2);
+        return res.status(500).json({ error: `Database error: ${err2.message}` });
+      }
+      res.json({ message: "Password changed successfully" });
+    });
+  });
+});
+
+// Failed logins with pagination
+app.get('/admin/api/failed-logins', adminAuth, (req, res) => {
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = 10;
+  const offset = (page - 1) * limit;
+
+  db.all(
+    "SELECT * FROM login_logs WHERE success=0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+    [limit, offset],
+    (err, rows) => {
+      if (err) {
+        console.error("DB fetch error (failed logins):", err);
+        return res.status(500).json({ error: `Database error: ${err.message}` });
+      }
+      db.get("SELECT COUNT(*) as total FROM login_logs WHERE success=0", (err2, row2) => {
+        if (err2) {
+          console.error("DB count error (failed logins):", err2);
+          return res.status(500).json({ error: `Database error: ${err2.message}` });
+        }
+        res.json({
+          failedLogins: rows,
+          total: row2.total,
+          page,
+          pages: Math.ceil(row2.total / limit)
+        });
+      });
+    }
+  );
+});
+
+// Flush all failed logins
+app.delete('/admin/api/failed-logins', adminAuth, (req, res) => {
+  db.run("DELETE FROM login_logs WHERE success=0", function(err) {
+    if (err) {
+      console.error("Error flushing failed logins:", err);
+      return res.status(500).json({ error: `Database error: ${err.message}` });
+    }
+    res.json({ message: "All failed login attempts have been deleted." });
+  });
+});
+
+// Get/Update email templates
 app.get('/admin/api/templates', adminAuth, (req, res) => {
   console.log("Returning templates to admin:", emailTemplates);
   res.json(emailTemplates);
@@ -307,17 +381,11 @@ app.get('/admin/api/templates', adminAuth, (req, res) => {
 
 app.post('/admin/api/templates', adminAuth, (req, res) => {
   emailTemplates = req.body;
-  try {
-    fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(emailTemplates, null, 2));
-    console.log("Templates updated to:", emailTemplates);
-    res.json({ message: "Templates updated" });
-  } catch (err) {
-    console.error("Error writing templates file:", err);
-    return res.status(500).json({ error: "Could not write email templates file." });
-  }
+  fs.writeFileSync(templatesFile, JSON.stringify(emailTemplates, null, 2));
+  res.json({ message: "Templates updated" });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server v1.7.0 running on port ${PORT}`);
+  console.log(`Server v2.0.0 running on port ${PORT}`);
 });
