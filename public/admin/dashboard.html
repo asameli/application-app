@@ -2,35 +2,215 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Admin Dashboard</title>
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body class="admin-body">
   <header class="header-bar">
     <div class="logo">surwave</div>
-    <!-- Navigation bar with a link back to the main Application page -->
     <nav class="top-nav">
-      <ul id="navLinks">
-        <li><a href="/">Application</a></li>
-      </ul>
+      <ul id="navLinks"></ul>
     </nav>
   </header>
-  
+
   <div class="container fancy-card">
-    <h1 class="fancy-title">Admin Login</h1>
-    <form action="/admin/login" method="POST">
-      <label for="username">Username:</label>
-      <input type="text" name="username" required>
-
-      <label for="password">Password:</label>
-      <input type="password" name="password" required>
-
-      <button type="submit">Login</button>
-    </form>
-    <div id="error" style="margin-top:1rem;">
-      <!-- Display errors if any, e.g. ?error=Invalid credentials -->
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+      <div>
+        <label>Status Filter:</label>
+        <select id="statusFilter">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div>
+        <label>Sort By:</label>
+        <select id="sortBy">
+          <option value="created_atDesc">Created (newest)</option>
+          <option value="created_atAsc">Created (oldest)</option>
+        </select>
+      </div>
+      <button onclick="fetchApplications()">Apply</button>
     </div>
+
+    <p class="total-apps">Total Applications: <span id="appCount">0</span></p>
+    <table class="apps-table" id="applicationsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Submitted At</th>
+          <th>Documents</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Apps here -->
+      </tbody>
+    </table>
+    <div id="emptyMessage" class="empty-message" style="display:none;">No applications found.</div>
+
+    <h2 class="section-title">Email Templates</h2>
+    <form id="templatesForm">
+      <label for="thankYou">Thank You Template:</label>
+      <textarea name="thankYou" id="thankYou" rows="4"></textarea>
+
+      <label for="accepted">Accepted Template:</label>
+      <textarea name="accepted" id="accepted" rows="4"></textarea>
+
+      <label for="rejected">Rejected Template:</label>
+      <textarea name="rejected" id="rejected" rows="4"></textarea>
+
+      <button type="submit">Update Templates</button>
+    </form>
   </div>
+
+  <footer class="footer">
+    <span>Version 1.6.0</span>
+  </footer>
+
+  <script>
+    // Check admin status
+    fetch('/admin/api/status')
+      .then(r => r.json())
+      .then(data => {
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '';
+        if (data.loggedIn) {
+          navLinks.innerHTML += '<li><a href="/">Application</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
+          navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
+        } else {
+          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+        }
+      })
+      .catch(() => {
+        const navLinks = document.getElementById('navLinks');
+        navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
+      });
+
+    function fetchApplications() {
+      const status = document.getElementById('statusFilter').value;
+      const sort = document.getElementById('sortBy').value;
+      let url = `/admin/api/applications?`;
+      if (status) url += `status=${status}&`;
+      if (sort) url += `sortBy=${sort}`;
+
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          const tableBody = document.querySelector('#applicationsTable tbody');
+          const emptyMessage = document.getElementById('emptyMessage');
+          tableBody.innerHTML = '';
+          if (!data || data.length === 0) {
+            emptyMessage.style.display = 'block';
+          } else {
+            emptyMessage.style.display = 'none';
+            data.forEach(app => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${app.id}</td>
+                <td>${app.firstname} ${app.lastname}</td>
+                <td>${app.email}</td>
+                <td>${app.status}</td>
+                <td>${app.created_at}</td>
+                <td class="doc-link">${renderDocuments(app.documents)}</td>
+                <td class="actions-cell">
+                  <button class="status-btn accept-btn" onclick="updateStatus('${app.id}', 'accepted')">Accept</button>
+                  <button class="status-btn reject-btn" onclick="updateStatus('${app.id}', 'rejected')">Reject</button>
+                  <button class="delete-btn" onclick="deleteApplication('${app.id}')">Delete</button>
+                </td>
+              `;
+              tableBody.appendChild(row);
+            });
+          }
+          fetchCount();
+        });
+    }
+
+    function renderDocuments(docJSON) {
+      if (!docJSON) return '';
+      let docs;
+      try {
+        docs = JSON.parse(docJSON);
+      } catch(e) {
+        return 'Invalid docs';
+      }
+      if (!Array.isArray(docs) || docs.length === 0) return 'No files';
+      return docs.map(doc =>
+        `<a href="/${doc.path}" download="${doc.original}">${doc.original}</a>`
+      ).join('<br>');
+    }
+
+    function fetchCount() {
+      fetch('/admin/api/count')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('appCount').innerText = data.count;
+        });
+    }
+
+    function fetchTemplates() {
+      fetch('/admin/api/templates')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('thankYou').value = data.thankYou;
+          document.getElementById('accepted').value = data.accepted;
+          document.getElementById('rejected').value = data.rejected;
+        });
+    }
+
+    document.getElementById('templatesForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const body = {
+        thankYou: document.getElementById('thankYou').value,
+        accepted: document.getElementById('accepted').value,
+        rejected: document.getElementById('rejected').value
+      };
+      fetch('/admin/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message || data.error);
+      })
+      .catch(err => {
+        alert('Error updating templates: ' + err.message);
+      });
+    });
+
+    function updateStatus(id, status) {
+      fetch(`/admin/api/application/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message || data.error);
+        fetchApplications();
+      });
+    }
+
+    function deleteApplication(id) {
+      if (!confirm('Delete this application?')) return;
+      fetch(`/admin/api/application/${id}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          alert(data.message || data.error);
+          fetchApplications();
+        });
+    }
+
+    // Initial loads
+    fetchApplications();
+    fetchTemplates();
+  </script>
 </body>
 </html>

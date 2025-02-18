@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Apartment Application</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<!-- Default to dark mode by adding "dark" to the body class -->
+<body class="dark">
   <header class="header-bar">
     <div class="logo">surwave</div>
     <nav class="top-nav">
@@ -15,68 +16,92 @@
   </header>
 
   <div class="container fancy-card">
+    <!-- Page Title -->
+    <h1 style="margin-top: 0;">Apartment application</h1>
+    <!-- Short Description -->
+    <p>
+      Hi There! 👋 Thank you for your interest in the apartment at Strickstrasse 10 in Uster.
+      Please upload your application and the relevant documents here.
+      Several documents can be uploaded. As soon as we have received the documents, we will
+      review them and get back to you as soon as possible.
+    </p>
+
     <form id="applicationForm" enctype="multipart/form-data">
       <label for="firstname">First Name:</label>
-      <input type="text" name="firstname" required>
+      <input type="text" name="firstname" required />
 
       <label for="lastname">Last Name:</label>
-      <input type="text" name="lastname" required>
+      <input type="text" name="lastname" required />
 
       <label for="email">Email Address:</label>
-      <input type="email" name="email" required>
+      <input type="email" name="email" required />
 
       <label for="documents">Upload Documents:</label>
-      <input type="file" name="documents" multiple required>
+      <input type="file" name="documents" multiple required />
 
       <button type="submit">Submit Application</button>
     </form>
     <div id="response"></div>
+
     <button id="toggleDarkMode">Toggle Dark Mode</button>
   </div>
 
-  <!-- A success overlay -->
-  <div id="successOverlay" style="
-    display:none; 
-    position:fixed; 
-    top:0; 
-    left:0; 
-    width:100%; 
-    height:100%; 
-    background-color:rgba(0,0,0,0.6);
-    align-items:center;
-    justify-content:center;
-    z-index:9999;">
-    <div style="
-      background:#fff; 
-      padding:2rem; 
-      border-radius:8px; 
-      max-width:400px; 
-      text-align:center;">
-      <div style="font-size:3rem; color:green;">&#10004;</div>
+  <!-- Success overlay -->
+  <div
+    id="successOverlay"
+    style="
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    "
+  >
+    <div
+      style="
+        background: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        max-width: 400px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 3rem; color: green;">&#10004;</div>
       <h2 id="overlayMessage">Application Submitted!</h2>
-      <button onclick="closeOverlay()" style="
-        margin-top:1rem;
-        border:none; 
-        padding:0.5rem 1rem;
-        background:#4CAF50;
-        color:#fff;
-        border-radius:4px; 
-        cursor:pointer;">Close</button>
+      <button
+        onclick="closeOverlay()"
+        style="
+          margin-top: 1rem;
+          border: none;
+          padding: 0.5rem 1rem;
+          background: #4caf50;
+          color: #fff;
+          border-radius: 4px;
+          cursor: pointer;
+        "
+      >
+        Close
+      </button>
     </div>
   </div>
 
   <footer class="footer">
-    <span>Version 1.6.0</span>
+    <span>Version 1.9.1</span>
   </footer>
 
   <script src="main.js"></script>
   <script>
     // Check admin status
-    fetch('/admin/api/status')
-      .then(r => r.json())
-      .then(data => {
-        const navLinks = document.getElementById('navLinks');
-        navLinks.innerHTML = '';
+    fetch("/admin/api/status")
+      .then((r) => r.json())
+      .then((data) => {
+        const navLinks = document.getElementById("navLinks");
+        navLinks.innerHTML = "";
         if (data.loggedIn) {
           navLinks.innerHTML += '<li><a href="/">Application</a></li>';
           navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
@@ -86,21 +111,21 @@
         }
       })
       .catch(() => {
-        const navLinks = document.getElementById('navLinks');
+        const navLinks = document.getElementById("navLinks");
         navLinks.innerHTML = '<li><a href="/admin/login.html">Login</a></li>';
       });
 
-    const form = document.getElementById('applicationForm');
-    form.addEventListener('submit', async (e) => {
+    const form = document.getElementById("applicationForm");
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const formData = new FormData(form);
-      const responseElem = document.getElementById('response');
-      responseElem.innerHTML = 'Submitting...';
+      const responseElem = document.getElementById("response");
+      responseElem.innerHTML = "Submitting...";
 
       try {
-        const resp = await fetch('/', {
-          method: 'POST',
-          body: formData
+        const resp = await fetch("/", {
+          method: "POST",
+          body: formData,
         });
         if (!resp.ok) {
           const text = await resp.text();
@@ -109,21 +134,20 @@
         }
         const data = await resp.json();
         if (data.success) {
-          // show overlay with success message
-          document.getElementById('overlayMessage').innerText = data.message;
-          document.getElementById('successOverlay').style.display = 'flex';
-          responseElem.innerHTML = '';
+          document.getElementById("overlayMessage").innerText = data.message;
+          document.getElementById("successOverlay").style.display = "flex";
+          responseElem.innerHTML = "";
           form.reset();
         } else {
-          responseElem.innerHTML = data.message || 'Error occurred';
+          responseElem.innerHTML = data.message || "Error occurred";
         }
       } catch (err) {
-        responseElem.innerHTML = 'An error occurred: ' + err.message;
+        responseElem.innerHTML = "An error occurred: " + err.message;
       }
     });
 
     function closeOverlay() {
-      document.getElementById('successOverlay').style.display = 'none';
+      document.getElementById("successOverlay").style.display = "none";
     }
   </script>
 </body>
