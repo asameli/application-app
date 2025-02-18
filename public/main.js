@@ -1,6 +1,5 @@
-// main.js (v2.2.3)
+// main.js (v2.2.4)
 
-// We'll define everything in a DOMContentLoaded listener so the elements exist
 document.addEventListener('DOMContentLoaded', () => {
   // Dark mode toggle
   const darkModeToggle = document.getElementById('darkModeToggle');
