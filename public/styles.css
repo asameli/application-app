@@ -1,4 +1,4 @@
-/* styles.css (v2.2.0) */
+/* styles.css (v2.2.1) */
 
 /* Shared & Body */
 body {
@@ -36,11 +36,20 @@ body {
   text-decoration: none;
   color: #333;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
 }
 .top-nav li a:hover {
   color: #666;
 }
 
+/* Icon styling for the dark mode toggle */
+#darkModeIcon {
+  margin-left: 4px;
+  transition: stroke 0.3s;
+}
+
+/* Container */
 .container {
   max-width: 1000px;
   margin: 2em auto;
@@ -139,7 +148,8 @@ body.dark {
 .apps-table thead {
   background-color: #eee;
 }
-.apps-table th, .apps-table td {
+.apps-table th,
+.apps-table td {
   padding: 0.75rem;
   border: 1px solid #ccc;
   text-align: left;
@@ -256,6 +266,10 @@ body.dark #successOverlay .overlay-content {
   border: 1px solid #ccc;
   padding: 0.5rem;
   border-radius: 4px;
+  background: #fdfdfd; /* Light background for better readability */
+}
+.dark #uploadContainer {
+  background: #2e2e2e; /* A bit lighter than #1e1e1e for contrast */
 }
 #uploadContainer #addFileButton {
   background-color: #007bff;
@@ -281,6 +295,9 @@ body.dark #successOverlay .overlay-content {
   background: #f0f0f0;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
+}
+.dark #uploadContainer #fileList li {
+  background: #3a3a3a;
 }
 #uploadContainer #fileList li button {
   background-color: #dc3545;
