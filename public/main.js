@@ -1,4 +1,4 @@
-// main.js (v2.2.2)
+// main.js (v2.2.3)
 
 // We'll define everything in a DOMContentLoaded listener so the elements exist
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedFiles.push(file);
         updateFileList();
       }
-      // Clear file input so re-selecting the same file later is possible
+      // Clear file input so re-selecting the same file is possible
       fileInput.value = "";
     });
   }

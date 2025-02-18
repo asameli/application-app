@@ -11,13 +11,16 @@
   <header class="header-bar">
     <div class="logo">surwave</div>
     <nav class="top-nav">
-      <ul id="navLinks">
-        <!-- Dark mode toggle icon in the nav -->
+      <!-- We have two <ul>s:
+           1) #navLinks for dynamic admin links,
+           2) #darkModeNav for the dark-mode icon so it doesn't get overwritten. -->
+      <ul id="navLinks"></ul>
+      <ul id="darkModeNav">
         <li>
           <a href="#" id="darkModeToggle" title="Toggle Dark Mode">
             <svg id="darkModeIcon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-              <!-- Example: a "moon" shape from Feather icons -->
+              <!-- A "moon" shape from Feather icons -->
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
             </svg>
           </a>
@@ -68,34 +71,36 @@
   </div>
 
   <footer class="footer">
-    <span>Version 2.2.2</span>
+    <span>Version 2.2.3</span>
   </footer>
 
-  <!-- Main JS with "defer" ensures DOM is ready before script runs -->
+  <!-- main.js with "defer" so the DOM is ready -->
   <script src="main.js" defer></script>
+
   <script>
     // Provide closeOverlay in global scope so the "Close" button works
     window.closeOverlay = function() {
       document.getElementById("successOverlay").style.display = "none";
     };
 
-    // Check admin status in a DOMContentLoaded or after script is loaded
+    // Once DOM is ready, fetch admin status
     document.addEventListener('DOMContentLoaded', () => {
       fetch("/admin/api/status")
         .then((r) => r.json())
         .then((data) => {
           const navLinks = document.getElementById("navLinks");
           if (data.loggedIn) {
-            navLinks.innerHTML += '<li><a href="/">Application</a></li>';
-            navLinks.innerHTML += '<li><a href="/admin/dashboard.html">Admin Panel</a></li>';
-            navLinks.innerHTML += '<li><a href="/admin/logout">Logout</a></li>';
+            navLinks.innerHTML = `
+              <li><a href="/">Application</a></li>
+              <li><a href="/admin/dashboard.html">Admin Panel</a></li>
+              <li><a href="/admin/logout">Logout</a></li>
+            `;
           } else {
-            navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+            navLinks.innerHTML = `<li><a href="/admin/login.html">Login</a></li>`;
           }
         })
         .catch(() => {
-          const navLinks = document.getElementById("navLinks");
-          navLinks.innerHTML += '<li><a href="/admin/login.html">Login</a></li>';
+          document.getElementById("navLinks").innerHTML = `<li><a href="/admin/login.html">Login</a></li>`;
         });
     });
   </script>
