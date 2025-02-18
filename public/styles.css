@@ -1,4 +1,4 @@
-/* styles.css (v2.0.0) */
+/* styles.css (v2.0.3) */
 
 /* Shared & Body */
 body {
@@ -211,7 +211,7 @@ body.dark {
   text-decoration: underline;
 }
 
-/* Overlay styling */
+/* Overlay changes */
 #successOverlay {
   display: none;
   position: fixed;
@@ -223,4 +223,30 @@ body.dark {
   align-items: center;
   justify-content: center;
   z-index: 9999;
+}
+#successOverlay .overlay-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 400px;
+  text-align: center;
+}
+#successOverlay .overlay-check {
+  font-size: 3rem;
+  color: green;
+}
+#successOverlay .overlay-button {
+  margin-top: 1rem;
+  border: none;
+  padding: 0.5rem 1rem;
+  background: #4CAF50;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Dark mode for overlay */
+body.dark #successOverlay .overlay-content {
+  background: #2a2a2a;
+  color: #fff;
 }
